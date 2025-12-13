@@ -4,15 +4,15 @@ A production-ready Blazor rich-text editor component for MudBlazor 8.15+ and .NE
 
 ## Features
 
-- ✨ **Two-way Data Binding** - Use `@bind-Value` for seamless data synchronization
-- 🎨 **Automatic Dark/Light Theme Support** - Adapts to MudBlazor theme changes
-- 📏 **Customizable Height** - Configure MinHeight and MaxHeight
-- 🛠️ **Configurable Toolbar** - Enable/disable formatting features dynamically
-- 📝 **Placeholder Text** - Guide users with custom placeholder messages
-- 🔒 **Read-Only Mode** - Display content without editing capabilities
-- ⚡ **Auto-loads Quill from CDN** - No bundling needed, handles dependencies automatically
-- 📖 **Full Async/Await Support** - Modern async APIs throughout
-- 🎯 **Interactive Playground** - Live demo with configuration testing
+- **Two-way Data Binding** - Use `@bind-Value` for seamless data synchronization
+- **Automatic Dark/Light Theme Support** - Adapts to MudBlazor theme changes
+- **Customizable Height** - Configure MinHeight and MaxHeight
+- **Configurable Toolbar** - Enable/disable formatting features dynamically
+- **Placeholder Text** - Guide users with custom placeholder messages
+- **Read-Only Mode** - Display content without editing capabilities
+- **Auto-loads Quill from CDN** - No bundling needed, handles dependencies automatically
+- **Full Async/Await Support** - Modern async APIs throughout
+- **Interactive Playground** - Live demo with configuration testing
 
 ## Installation
 
