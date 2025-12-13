@@ -38,5 +38,5 @@ jobs:
         run: |
           set -e
           for nupkg in artifacts/*.nupkg; do
-            dotnet nuget push "$nupkg" -s https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate || true
+            dotnet nuget push "$nupkg" -s https://api.nuget.org/v3/index.json --skip-duplicate || true
           done
