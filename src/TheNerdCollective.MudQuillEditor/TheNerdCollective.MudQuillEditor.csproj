@@ -4,13 +4,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>TheNerdCollective.MudQuillEditor</PackageId>
-    <Version>0.1.7</Version>
+    <Version>0.1.8</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>MudBlazor-compatible Blazor wrapper for the Quill rich-text editor.</Description>
     <PackageTags>mudblazor;blazor;quill;rich-text</PackageTags>
     <License>Apache-2.0</License>
     <LicenseExpression>Apache-2.0</LicenseExpression>
-    <RepositoryUrl>https://github.com/janhjordie/Nerd.MudEditor</RepositoryUrl>
+    <RepositoryUrl>https://github.com/janhjordie/MudQuillEditor</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
