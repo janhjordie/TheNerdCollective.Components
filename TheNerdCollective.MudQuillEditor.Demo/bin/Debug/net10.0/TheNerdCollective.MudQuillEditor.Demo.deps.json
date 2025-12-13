@@ -1,0 +1,58 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "TheNerdCollective.MudQuillEditor.Demo/1.0.0": {
+        "dependencies": {
+          "MudBlazor": "8.15.0",
+          "TheNerdCollective.MudQuillEditor": "0.1.0"
+        },
+        "runtime": {
+          "TheNerdCollective.MudQuillEditor.Demo.dll": {}
+        }
+      },
+      "MudBlazor/8.15.0": {
+        "runtime": {
+          "lib/net9.0/MudBlazor.dll": {
+            "assemblyVersion": "8.15.0.0",
+            "fileVersion": "8.15.0.0"
+          }
+        }
+      },
+      "TheNerdCollective.MudQuillEditor/0.1.0": {
+        "dependencies": {
+          "MudBlazor": "8.15.0"
+        },
+        "runtime": {
+          "TheNerdCollective.MudQuillEditor.dll": {
+            "assemblyVersion": "0.1.0.0",
+            "fileVersion": "0.1.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "TheNerdCollective.MudQuillEditor.Demo/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "MudBlazor/8.15.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-iOJEnQ6tYGQPfPJaUazyC8H6pcczgaMX7vhUzrJPpB0WqEXNozwMfSzoOe2/JZmVWJcUfYZgKBeBU2Z27XY7Sw==",
+      "path": "mudblazor/8.15.0",
+      "hashPath": "mudblazor.8.15.0.nupkg.sha512"
+    },
+    "TheNerdCollective.MudQuillEditor/0.1.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

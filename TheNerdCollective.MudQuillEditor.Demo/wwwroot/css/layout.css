@@ -1,0 +1,21 @@
+/* Layout styles for dark/light theme compatibility */
+.mud-appbar img {
+    filter: brightness(1);
+}
+
+/* In dark mode, invert the logo if needed */
+body[data-dark-mode="true"] .mud-appbar img {
+    filter: brightness(0.9);
+}
+
+/* Ensure MudLink in AppBar is visible */
+.mud-appbar .mud-link {
+    color: inherit;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+
+.mud-appbar .mud-link:hover {
+    opacity: 0.8;
+}

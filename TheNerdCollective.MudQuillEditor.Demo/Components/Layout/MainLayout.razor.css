@@ -1,0 +1,7 @@
+/* MudBlazor MainLayout - Theme colors only */
+
+::deep .mud-main-content {
+    padding: 2rem 1rem;
+}
+
+

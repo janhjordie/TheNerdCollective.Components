@@ -1,0 +1,33 @@
+{
+  "Files": [
+    {
+      "Id": "/Users/janhjordie/Projects/The Nerd Collective/Nerd.MudEditor/src/TheNerdCollective.MudQuillEditor/wwwroot/css/mudquilleditor.css",
+      "PackagePath": "staticwebassets/css/mudquilleditor.css"
+    },
+    {
+      "Id": "/Users/janhjordie/Projects/The Nerd Collective/Nerd.MudEditor/src/TheNerdCollective.MudQuillEditor/wwwroot/js/mudquilleditor.js",
+      "PackagePath": "staticwebassets/js/mudquilleditor.js"
+    },
+    {
+      "Id": "obj/Debug/net10.0/staticwebassets/msbuild.TheNerdCollective.MudQuillEditor.Microsoft.AspNetCore.StaticWebAssetEndpoints.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssetEndpoints.props"
+    },
+    {
+      "Id": "obj/Debug/net10.0/staticwebassets/msbuild.TheNerdCollective.MudQuillEditor.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj/Debug/net10.0/staticwebassets/msbuild.build.TheNerdCollective.MudQuillEditor.props",
+      "PackagePath": "build\\TheNerdCollective.MudQuillEditor.props"
+    },
+    {
+      "Id": "obj/Debug/net10.0/staticwebassets/msbuild.buildMultiTargeting.TheNerdCollective.MudQuillEditor.props",
+      "PackagePath": "buildMultiTargeting\\TheNerdCollective.MudQuillEditor.props"
+    },
+    {
+      "Id": "obj/Debug/net10.0/staticwebassets/msbuild.buildTransitive.TheNerdCollective.MudQuillEditor.props",
+      "PackagePath": "buildTransitive\\TheNerdCollective.MudQuillEditor.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

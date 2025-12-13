@@ -1,0 +1,28 @@
+﻿<Project>
+  <ItemGroup>
+    <StaticWebAssetEndpoint Include="_content/TheNerdCollective.MudQuillEditor/css/mudquilleditor.css">
+      <AssetFile>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\css\mudquilleditor.css'))</AssetFile>
+      <Selectors><![CDATA[[]]]></Selectors>
+      <EndpointProperties><![CDATA[[{"Name":"integrity","Value":"sha256-0Xfruk1z2G0opFKwtnQb5fEnf/m90e8zp7SCcN\u002Bzfo0="}]]]></EndpointProperties>
+      <ResponseHeaders><![CDATA[[{"Name":"Cache-Control","Value":"no-cache"},{"Name":"Content-Length","Value":"2581"},{"Name":"Content-Type","Value":"text/css"},{"Name":"ETag","Value":"\u00220Xfruk1z2G0opFKwtnQb5fEnf/m90e8zp7SCcN\u002Bzfo0=\u0022"},{"Name":"Last-Modified","Value":"Sat, 13 Dec 2025 19:50:44 GMT"},{"Name":"Vary","Value":"Accept-Encoding"}]]]></ResponseHeaders>
+    </StaticWebAssetEndpoint>
+    <StaticWebAssetEndpoint Include="_content/TheNerdCollective.MudQuillEditor/css/mudquilleditor.pu8wr6jieh.css">
+      <AssetFile>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\css\mudquilleditor.css'))</AssetFile>
+      <Selectors><![CDATA[[]]]></Selectors>
+      <EndpointProperties><![CDATA[[{"Name":"fingerprint","Value":"pu8wr6jieh"},{"Name":"integrity","Value":"sha256-0Xfruk1z2G0opFKwtnQb5fEnf/m90e8zp7SCcN\u002Bzfo0="},{"Name":"label","Value":"_content/TheNerdCollective.MudQuillEditor/css/mudquilleditor.css"}]]]></EndpointProperties>
+      <ResponseHeaders><![CDATA[[{"Name":"Cache-Control","Value":"max-age=31536000, immutable"},{"Name":"Content-Length","Value":"2581"},{"Name":"Content-Type","Value":"text/css"},{"Name":"ETag","Value":"\u00220Xfruk1z2G0opFKwtnQb5fEnf/m90e8zp7SCcN\u002Bzfo0=\u0022"},{"Name":"Last-Modified","Value":"Sat, 13 Dec 2025 19:50:44 GMT"},{"Name":"Vary","Value":"Accept-Encoding"}]]]></ResponseHeaders>
+    </StaticWebAssetEndpoint>
+    <StaticWebAssetEndpoint Include="_content/TheNerdCollective.MudQuillEditor/js/mudquilleditor.c6oudjt2s7.js">
+      <AssetFile>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\js\mudquilleditor.js'))</AssetFile>
+      <Selectors><![CDATA[[]]]></Selectors>
+      <EndpointProperties><![CDATA[[{"Name":"fingerprint","Value":"c6oudjt2s7"},{"Name":"integrity","Value":"sha256-5H6mjQuLvdwZZ6TiyyFZDS26K2wNFHj5Fv3cW92i1c8="},{"Name":"label","Value":"_content/TheNerdCollective.MudQuillEditor/js/mudquilleditor.js"}]]]></EndpointProperties>
+      <ResponseHeaders><![CDATA[[{"Name":"Cache-Control","Value":"max-age=31536000, immutable"},{"Name":"Content-Length","Value":"9791"},{"Name":"Content-Type","Value":"text/javascript"},{"Name":"ETag","Value":"\u00225H6mjQuLvdwZZ6TiyyFZDS26K2wNFHj5Fv3cW92i1c8=\u0022"},{"Name":"Last-Modified","Value":"Sat, 13 Dec 2025 21:14:55 GMT"},{"Name":"Vary","Value":"Accept-Encoding"}]]]></ResponseHeaders>
+    </StaticWebAssetEndpoint>
+    <StaticWebAssetEndpoint Include="_content/TheNerdCollective.MudQuillEditor/js/mudquilleditor.js">
+      <AssetFile>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\js\mudquilleditor.js'))</AssetFile>
+      <Selectors><![CDATA[[]]]></Selectors>
+      <EndpointProperties><![CDATA[[{"Name":"integrity","Value":"sha256-5H6mjQuLvdwZZ6TiyyFZDS26K2wNFHj5Fv3cW92i1c8="}]]]></EndpointProperties>
+      <ResponseHeaders><![CDATA[[{"Name":"Cache-Control","Value":"no-cache"},{"Name":"Content-Length","Value":"9791"},{"Name":"Content-Type","Value":"text/javascript"},{"Name":"ETag","Value":"\u00225H6mjQuLvdwZZ6TiyyFZDS26K2wNFHj5Fv3cW92i1c8=\u0022"},{"Name":"Last-Modified","Value":"Sat, 13 Dec 2025 21:14:55 GMT"},{"Name":"Vary","Value":"Accept-Encoding"}]]]></ResponseHeaders>
+    </StaticWebAssetEndpoint>
+  </ItemGroup>
+</Project>

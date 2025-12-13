@@ -1,0 +1,124 @@
+@page "/installation"
+@rendermode InteractiveServer
+
+<PageTitle>Installation - MudQuillEditor</PageTitle>
+
+<div class="mb-6">
+    <MudText Typo="Typo.h3" GutterBottom="true">Installation Guide</MudText>
+    <MudText Typo="Typo.subtitle1">Get MudQuillEditor up and running in your Blazor project</MudText>
+</div>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6">Step 1: Add NuGet Package</MudText>
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.body2" Class="mb-3">Install the MudQuillEditor package from NuGet:</MudText>
+    <pre style="background:#f5f5f5;padding:12px;border-radius:4px;border-left:4px solid #2196F3;"><code>dotnet add package TheNerdCollective.MudQuillEditor</code></pre>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6">Step 2: Add Script Reference</MudText>
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.body2" Class="mb-3">In your <code>App.razor</code>, add the MudQuillEditor script reference before the Blazor runtime script:</MudText>
+    <pre style="background:#f5f5f5;padding:12px;border-radius:4px;border-left:4px solid #2196F3;"><code>&lt;script src="_content/TheNerdCollective.MudQuillEditor/js/mudquilleditor.js"&gt;&lt;/script&gt;
+&lt;script src="_framework/blazor.server.js"&gt;&lt;/script&gt;</code></pre>
+    
+    <MudAlert Class="mt-3" Severity="Severity.Info">
+        <strong>Requirements:</strong> MudBlazor must be installed and configured. MudQuillEditor automatically loads Quill CSS/JS from CDN and handles all dependencies.
+    </MudAlert>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6">Step 3: Use the Component</MudText>
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.body2" Class="mb-3">Bind the component to a property and optionally configure height and other options:</MudText>
+    <pre style="background:#f5f5f5;padding:12px;border-radius:4px;border-left:4px solid #4CAF50;"><code>&lt;MudQuillEditor @@bind-Value="HtmlContent" 
+               MinHeight="150px" 
+               MaxHeight="300px"
+               Placeholder="Enter text here..." /&gt;
+
+@@code {{
+    private string HtmlContent = "&lt;p&gt;Hello&lt;/p&gt;";
+}}</code></pre>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6">Component Parameters</MudText>
+<MudSimpleTable Dense Striped Class="mb-6">
+    <thead>
+        <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>Value</code></td>
+            <td>string?</td>
+            <td>null</td>
+            <td>HTML content of the editor</td>
+        </tr>
+        <tr>
+            <td><code>ValueChanged</code></td>
+            <td>EventCallback&lt;string?&gt;</td>
+            <td>—</td>
+            <td>Fires when editor content changes (two-way binding)</td>
+        </tr>
+        <tr>
+            <td><code>MinHeight</code></td>
+            <td>string?</td>
+            <td>null</td>
+            <td>Minimum editor height (CSS value, e.g., "150px")</td>
+        </tr>
+        <tr>
+            <td><code>MaxHeight</code></td>
+            <td>string</td>
+            <td>150px</td>
+            <td>Maximum editor height (CSS value, e.g., "300px")</td>
+        </tr>
+        <tr>
+            <td><code>Theme</code></td>
+            <td>string</td>
+            <td>"snow"</td>
+            <td>Quill theme name ("snow" or "bubble")</td>
+        </tr>
+        <tr>
+            <td><code>ReadOnly</code></td>
+            <td>bool</td>
+            <td>false</td>
+            <td>Disable editing when true</td>
+        </tr>
+        <tr>
+            <td><code>Toolbar</code></td>
+            <td>object?</td>
+            <td>Default toolbar</td>
+            <td>Customizable toolbar modules. Default includes bold, italic, underline, lists, link, and image</td>
+        </tr>
+        <tr>
+            <td><code>Placeholder</code></td>
+            <td>string?</td>
+            <td>null</td>
+            <td>Placeholder text shown when editor is empty</td>
+        </tr>
+    </tbody>
+</MudSimpleTable>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6">Component Methods</MudText>
+<MudSimpleTable Dense Striped>
+    <thead>
+        <tr>
+            <th>Method</th>
+            <th>Returns</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>SetHtmlAsync(string? html)</code></td>
+            <td>Task</td>
+            <td>Set editor content programmatically</td>
+        </tr>
+        <tr>
+            <td><code>GetHtmlAsync()</code></td>
+            <td>Task&lt;string?&gt;</td>
+            <td>Get editor content programmatically</td>
+        </tr>
+    </tbody>
+</MudSimpleTable>

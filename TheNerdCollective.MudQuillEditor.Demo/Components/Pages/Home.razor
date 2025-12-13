@@ -1,0 +1,165 @@
+﻿@page "/"
+@using TheNerdCollective.MudQuillEditor
+@rendermode InteractiveServer
+
+<PageTitle>MudQuillEditor</PageTitle>
+
+<div class="mb-6">
+    <MudText Typo="Typo.h3" GutterBottom="true">MudQuillEditor</MudText>
+    <MudText Typo="Typo.subtitle1">A Blazor component wrapping Quill rich-text editor with MudBlazor styling</MudText>
+</div>
+
+<MudAlert Severity="Severity.Info" Class="mb-6">
+    <MudText Typo="Typo.body2">
+        <strong>Built by <MudLink Href="https://www.thenerdcollective.dk/" Target="_blank" Color="Color.Info">The Nerd Collective Aps</MudLink></strong>
+        <br />
+        Developed by <MudLink Href="https://github.com/janhjordie" Target="_blank" Color="Color.Info">janhjordie</MudLink>
+        <br />
+        MudQuillEditor is a production-ready component we use for our customers' applications. 
+        It combines the power of Quill 2.0 with MudBlazor's beautiful design system.
+    </MudText>
+</MudAlert>
+
+<MudPaper Class="pa-4 mb-6">
+    <MudText Typo="Typo.body1" Class="mb-3">
+        MudQuillEditor is a Blazor component that provides a rich text editor powered by <MudLink Href="https://quilljs.com/" Target="_blank">Quill 2.0</MudLink>. 
+        It integrates seamlessly with <MudLink Href="https://www.mudblazor.com/" Target="_blank">MudBlazor</MudLink> for styling and theming.
+    </MudText>
+    <MudText Typo="Typo.body2">
+        <strong>Features:</strong>
+    </MudText>
+    <ul>
+        <li>✨ Two-way data binding with <code>@@bind-Value</code></li>
+        <li>🎨 Automatic dark/light theme support</li>
+        <li>📏 Customizable height with MinHeight and MaxHeight</li>
+        <li>⚡ Auto-loads Quill from CDN</li>
+        <li>🔄 Real-time HTML content updates</li>
+        <li>📖 Full async/await support</li>
+    </ul>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6">Live Demo & Playground</MudText>
+<MudText Typo="Typo.body2" Class="mb-3">Customize the editor using the controls below. Changes apply instantly to the editor.</MudText>
+
+<MudPaper Class="pa-6 mb-6">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-3">Editor Configuration:</MudText>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="PlaygroundPlaceholder" Label="Placeholder Text" Variant="Variant.Outlined" FullWidth />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudCheckBox @bind-Value="PlaygroundReadOnly" Label="Read Only Mode" Color="Color.Primary" />
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-3">Toolbar Features:</MudText>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudCheckBox @bind-Value="EnableBold" Label="Bold" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudCheckBox @bind-Value="EnableItalic" Label="Italic" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudCheckBox @bind-Value="EnableUnderline" Label="Underline" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudCheckBox @bind-Value="EnableLists" Label="Lists" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudCheckBox @bind-Value="EnableLink" Label="Link" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudCheckBox @bind-Value="EnableImage" Label="Image" Color="Color.Primary" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4 mb-6">
+    <MudText Typo="Typo.subtitle2" Class="mb-3">Editor:</MudText>
+    <MudQuillEditor @bind-Value="HtmlContent" 
+                    MinHeight="300px" 
+                    MaxHeight="300px" 
+                    Placeholder="@PlaygroundPlaceholder" 
+                    ReadOnly="@PlaygroundReadOnly"
+                    Toolbar="@BuildToolbar()" />
+    <MudText Typo="Typo.subtitle2" Class="mt-4">Rendered HTML</MudText>
+    <MudPaper Class="pa-3 mt-2" Style="background-color: #f5f5f5;">
+        @((MarkupString)HtmlContent)
+    </MudPaper>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6">Configuration Summary</MudText>
+<MudPaper Class="pa-4" Style="background-color: #f5f5f5; border-left: 4px solid #1976d2;">
+    <MudText Typo="Typo.caption">
+        <strong>Placeholder:</strong> @(string.IsNullOrEmpty(PlaygroundPlaceholder) ? "(empty)" : $"\"{PlaygroundPlaceholder}\"")<br />
+        <strong>Read Only:</strong> @PlaygroundReadOnly<br />
+        <strong>Toolbar Features:</strong> @GetToolbarSummary()<br />
+        <strong>Theme:</strong> snow (default)<br />
+        <strong>Min Height:</strong> 300px<br />
+        <strong>Max Height:</strong> 300px
+    </MudText>
+</MudPaper>
+
+@code {
+    private string HtmlContent { get; set; } = "<p>Hello from MudQuillEditor - try editing with custom settings!</p>";
+    
+    // Playground configuration
+    private string PlaygroundPlaceholder { get; set; } = "Enter your content here...";
+    private bool PlaygroundReadOnly { get; set; } = false;
+    
+    // Toolbar feature toggles
+    private bool EnableBold { get; set; } = true;
+    private bool EnableItalic { get; set; } = true;
+    private bool EnableUnderline { get; set; } = true;
+    private bool EnableLists { get; set; } = true;
+    private bool EnableLink { get; set; } = true;
+    private bool EnableImage { get; set; } = true;
+    
+    private object? BuildToolbar()
+    {
+        var toolbarItems = new List<object>();
+        var textFormatting = new List<string>();
+        
+        if (EnableBold) textFormatting.Add("bold");
+        if (EnableItalic) textFormatting.Add("italic");
+        if (EnableUnderline) textFormatting.Add("underline");
+        
+        if (textFormatting.Count > 0)
+            toolbarItems.Add(textFormatting.ToArray());
+        
+        var listItems = new List<object>();
+        if (EnableLists)
+        {
+            listItems.Add(new { list = "ordered" });
+            listItems.Add(new { list = "bullet" });
+        }
+        
+        if (listItems.Count > 0)
+            toolbarItems.Add(listItems.ToArray());
+        
+        var linkImage = new List<string>();
+        if (EnableLink) linkImage.Add("link");
+        if (EnableImage) linkImage.Add("image");
+        
+        if (linkImage.Count > 0)
+            toolbarItems.Add(linkImage.ToArray());
+        
+        return toolbarItems.Count > 0 ? toolbarItems.ToArray() : null;
+    }
+    
+    private string GetToolbarSummary()
+    {
+        var features = new List<string>();
+        if (EnableBold) features.Add("bold");
+        if (EnableItalic) features.Add("italic");
+        if (EnableUnderline) features.Add("underline");
+        if (EnableLists) features.Add("lists");
+        if (EnableLink) features.Add("link");
+        if (EnableImage) features.Add("image");
+        
+        return features.Count > 0 ? string.Join(", ", features) : "none";
+    }
+}

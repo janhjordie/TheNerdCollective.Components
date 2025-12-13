@@ -1,0 +1,157 @@
+﻿@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+<MudThemeProvider Theme="@_theme" IsDarkMode="_isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary">
+        <MudHidden Breakpoint="Breakpoint.SmAndUp">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Secondary" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        </MudHidden>
+        
+        <div class="d-flex align-center ml-3">
+            <img src="@(_isDarkMode ? "images/logo-light.svg" : "images/logo-dark.svg")" alt="The Nerd Collective" style="height: 32px; margin-right: 12px;" />
+            <MudText Typo="Typo.h5">MudQuillEditor</MudText>
+        </div>
+        
+        <MudSpacer />
+        <MudIconButton Icon="@(DarkLightModeButtonIcon)" Color="Color.Secondary" OnClick="@DarkModeToggle" />
+    </MudAppBar>
+    <MudDrawer id="nav-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <NavMenu />
+    </MudDrawer>
+     <MudMainContent>
+       <MudContainer MaxWidth="MaxWidth.Large" Class="my-6 pt-6">
+        @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = false;
+    private MudTheme? _theme = null;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        
+        _theme = _nerdTheme;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("mudQuillEditor.setDarkMode", _isDarkMode);
+        }
+    }
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private async void DarkModeToggle()
+    {
+        _isDarkMode = !_isDarkMode;
+        await JS.InvokeVoidAsync("mudQuillEditor.setDarkMode", _isDarkMode);
+        StateHasChanged();
+    }
+
+    public string DarkLightModeButtonIcon => _isDarkMode switch
+    {
+        true => Icons.Material.Rounded.AutoMode,
+        false => Icons.Material.Outlined.DarkMode,
+    };
+
+    private readonly MudTheme _nerdTheme = new()
+    {
+        Typography = new Typography()
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = new[] { "Roboto", "Helvetica", "Arial", "sans-serif" },
+                FontSize = "1rem",
+                FontWeight = "400",
+                LineHeight = "1.5",
+                LetterSpacing = ".00938em",
+                TextTransform = null
+            },
+            H1 = new H1Typography
+            {
+                FontFamily = new[] { "Roboto", "Helvetica", "Arial", "sans-serif" },
+                FontSize = "2.25rem",
+                FontWeight = "500",
+                LineHeight = "1.6",
+                LetterSpacing = ".0075em"
+            },
+            H2 = new H2Typography
+            {
+                FontFamily = new[] { "Roboto", "Helvetica", "Arial", "sans-serif" },
+                FontSize = "1.25rem",
+                FontWeight = "300",
+                LineHeight = "1.6",
+                LetterSpacing = ".0075em"
+            },
+            H3 = new H3Typography
+            {
+                FontFamily = new[] { "Roboto", "Helvetica", "Arial", "sans-serif" },
+                FontSize = "1.05rem",
+                FontWeight = "200",
+                LineHeight = "1.6",
+                LetterSpacing = ".0075em"
+            }
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#fff",
+            Secondary = "#ff7a8a",
+            Background = "#202020",
+            DrawerBackground = "#202020"
+        },
+        PaletteLight = new PaletteLight
+        {
+            Black = "#000",
+            White = "#fff",
+            Primary = "#113A5D",
+            Secondary = "#ff7a8a",
+            Tertiary = "#ff7a8a",
+            AppbarBackground = "#113A5D",
+            AppbarText = "#fff",
+            Background = "#fafafa",
+            BackgroundGray = "#eeeeee",
+            DrawerBackground = "#fff",
+            DrawerText = "rgba(0,0,0, 0.7)",
+            DrawerIcon = "rgba(0,0,0, 0.5)",
+            TextPrimary = "#000000",
+            TextSecondary = "#424242",
+            TextDisabled = "rgba(0,0,0, 0.4)",
+            ActionDefault = "#1976d2",
+            ActionDisabled = "rgba(0,0,0, 0.26)",
+            ActionDisabledBackground = "rgba(0, 0, 0, 0.12)",
+            Surface = "#ffffff",
+            Info = "#1976d2",
+            Success = "#06d79c",
+            Warning = "#ffb545",
+            Error = "#ff6b6b",
+            LinesDefault = "#e0e0e0",
+            TableLines = "#e0e0e0",
+            Divider = "#e0e0e0",
+            OverlayLight = "rgba(0, 0, 0, 0.3)",
+            GrayLight = "#e8e8e8",
+            GrayLighter = "#f5f5f5"
+        }
+    };
+}
+
+

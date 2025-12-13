@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "y15kcBpTSuM=",
+  "success": true,
+  "projectFilePath": "/Users/janhjordie/Projects/The Nerd Collective/Nerd.MudEditor/TheNerdCollective.MudQuillEditor.Demo/TheNerdCollective.MudQuillEditor.Demo.csproj",
+  "expectedPackageFiles": [
+    "/Users/janhjordie/.nuget/packages/microsoft.aspnetcore.app.internal.assets/10.0.1/microsoft.aspnetcore.app.internal.assets.10.0.1.nupkg.sha512",
+    "/Users/janhjordie/.nuget/packages/mudblazor/8.15.0/mudblazor.8.15.0.nupkg.sha512"
+  ],
+  "logs": []
+}
