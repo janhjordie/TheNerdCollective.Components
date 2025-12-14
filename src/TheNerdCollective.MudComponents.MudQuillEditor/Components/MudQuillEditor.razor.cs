@@ -4,7 +4,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
-namespace TheNerdCollective.MudQuillEditor;
+namespace TheNerdCollective.MudComponents;
 
 /// <summary>
 /// A Blazor rich-text editor component wrapping Quill with MudBlazor styling.

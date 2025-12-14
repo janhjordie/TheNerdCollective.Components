@@ -149,7 +149,7 @@ A fully-featured demo app is included with:
 Run the demo:
 
 ```bash
-cd TheNerdCollective.MudQuillEditor.Demo
+cd src/TheNerdCollective.Demo
 dotnet run
 ```
 
