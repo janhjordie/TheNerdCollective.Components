@@ -10,7 +10,7 @@
     <PackageTags>mudblazor;blazor;components;library</PackageTags>
     <License>Apache-2.0</License>
     <LicenseExpression>Apache-2.0</LicenseExpression>
-    <RepositoryUrl>https://github.com/janhjordie/MudQuillEditor</RepositoryUrl>
+    <RepositoryUrl>https://github.com/janhjordie/TheNerdCollective.Components</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
