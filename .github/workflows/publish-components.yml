@@ -1,11 +1,9 @@
 name: Publish Components Package
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (e.g., 0.1.0)'
-        required: true
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -24,9 +22,12 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Update Version
+      - name: Get Version from csproj
+        id: version
         run: |
-          sed -i 's/<Version>.*<\/Version>/<Version>${{ github.event.inputs.version }}<\/Version>/g' src/TheNerdCollective.Components/TheNerdCollective.Components.csproj
+          VERSION=$(grep -oP '<Version>\K[^<]+' src/TheNerdCollective.Components/TheNerdCollective.Components.csproj | head -1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
 
       - name: Restore
         run: dotnet restore src/TheNerdCollective.Components
@@ -53,5 +54,5 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag -a "components-v${{ github.event.inputs.version }}" -m "Components ${{ github.event.inputs.version }}"
-          git push origin "components-v${{ github.event.inputs.version }}"
+          git tag -a "components-v${{ steps.version.outputs.version }}" -m "Components ${{ steps.version.outputs.version }}"
+          git push origin "components-v${{ steps.version.outputs.version }}"
