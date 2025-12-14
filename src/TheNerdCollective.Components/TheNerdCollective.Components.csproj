@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>TheNerdCollective.Components</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>The Nerd Collective component library for MudBlazor. Includes rich-text editor and other reusable components.</Description>
     <PackageTags>mudblazor;blazor;components;library</PackageTags>
