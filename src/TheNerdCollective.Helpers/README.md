@@ -71,3 +71,7 @@ Apache License 2.0 - See LICENSE file for details
 ## Repository
 
 [TheNerdCollective.Components on GitHub](https://github.com/janhjordie/TheNerdCollective.Components)
+
+---
+
+Built with ❤️ by [The Nerd Collective Aps](https://www.thenerdcollective.dk/)
