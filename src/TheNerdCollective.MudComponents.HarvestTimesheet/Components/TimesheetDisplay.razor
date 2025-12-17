@@ -73,18 +73,7 @@
                             @if (!string.IsNullOrWhiteSpace(context.ExternalReferencePermalink))
                             {
                                 <MudLink Href="@context.ExternalReferencePermalink" Target="_blank" rel="noopener noreferrer" title="Open linked card">
-                                    @if (!string.IsNullOrWhiteSpace(context.ExternalReferenceServiceIconUrl))
-                                    {
-                                        <MudAvatar image="@context.ExternalReferenceServiceIconUrl" Size="Size.Small" />
-                                    }
-                                    else if (IsTrelloExternal(context))
-                                    {
-                                        <MudIcon Icon="@Icons.Material.Filled.ViewKanban" Color="Color.Info" />
-                                    }
-                                    else
-                                    {
-                                        <MudIcon Icon="@Icons.Material.Filled.Link" Color="Color.Info" />
-                                    }
+                                    <MudIcon Icon="@Icons.Material.Filled.ViewKanban" Color="Color.Info" />
                                 </MudLink>
                             }
                         </MudTd>
