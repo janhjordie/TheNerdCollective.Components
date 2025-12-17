@@ -77,10 +77,23 @@ public class HarvestService
             response.EnsureSuccessStatusCode();
 
             var contentStr = await response.Content.ReadAsStringAsync();
-            var data = JsonSerializer.Deserialize<HarvestTimeEntriesResponse>(contentStr, SerializerOptions);
-            var entries = data?.TimeEntries ?? new List<HarvestTimeEntry>();
+            var entries = new List<TimesheetEntry>();
 
-            return entries.Select(MapToTimesheetEntry).ToList();
+            using var doc = JsonDocument.Parse(contentStr);
+            if (doc.RootElement.TryGetProperty("time_entries", out var timeEntriesElement))
+            {
+                foreach (var element in timeEntriesElement.EnumerateArray())
+                {
+                    var entry = element.Deserialize<HarvestTimeEntry>(SerializerOptions);
+                    if (entry != null)
+                    {
+                        var raw = element.GetRawText();
+                        entries.Add(MapToTimesheetEntry(entry, raw));
+                    }
+                }
+            }
+
+            return entries;
         }
         catch
         {
@@ -138,7 +151,7 @@ public class HarvestService
     /// </summary>
     public void ClearProjectIds() => _projectIds.Clear();
 
-    private TimesheetEntry MapToTimesheetEntry(HarvestTimeEntry entry)
+    private TimesheetEntry MapToTimesheetEntry(HarvestTimeEntry entry, string rawJson)
     {
         return new TimesheetEntry
         {
@@ -152,7 +165,7 @@ public class HarvestService
             Notes = entry.Notes ?? string.Empty,
             ExternalReferencePermalink = entry.ExternalReference?.Permalink ?? string.Empty,
             ExternalReferenceService = entry.ExternalReference?.Service ?? string.Empty,
-            RawEntryJson = JsonSerializer.Serialize(entry, SerializerOptions),
+            RawEntryJson = rawJson,
             Hours = entry.Hours,
             SpentDate = !string.IsNullOrEmpty(entry.SpentDate) ? DateTime.Parse(entry.SpentDate) : DateTime.Now,
             CreatedAt = entry.CreatedAt,
