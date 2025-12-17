@@ -46,16 +46,17 @@ jobs:
             const token = await core.getIDToken('api://NuGetGallery');
             core.setSecret(token);
             core.setOutput('token', token);
+            core.exportVariable('NUGET_AUTH_TOKEN', token);
 
       - name: Configure NuGet Sources
         run: dotnet nuget update source nuget.org -s https://api.nuget.org/v3/index.json --configfile ./NuGet.config 2>/dev/null || dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org --configfile ./NuGet.config
 
       - name: Push to NuGet
         env:
-          NUGET_TOKEN: ${{ steps.oidc.outputs.token }}
+          NUGET_AUTH_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           for nupkg in artifacts/*.nupkg; do
-            dotnet nuget push "$nupkg" -s https://api.nuget.org/v3/index.json -k "$NUGET_TOKEN" --skip-duplicate
+            dotnet nuget push "$nupkg" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_AUTH_TOKEN" --skip-duplicate
           done
 
       - name: Create Git Tag
