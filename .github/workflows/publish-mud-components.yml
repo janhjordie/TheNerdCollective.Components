@@ -58,3 +58,51 @@ jobs:
           git push origin :refs/tags/"mud-quill-editor-v${{ steps.version.outputs.version }}" 2>/dev/null || true
           git tag -a "mud-quill-editor-v${{ steps.version.outputs.version }}" -m "MudQuillEditor ${{ steps.version.outputs.version }}"
           git push origin "mud-quill-editor-v${{ steps.version.outputs.version }}"
+  publish-harvest-timesheet:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Get Version from csproj
+        id: version
+        run: |
+          VERSION=$(grep -oP '<Version>\K[^<]+' src/TheNerdCollective.MudComponents.HarvestTimesheet/TheNerdCollective.MudComponents.HarvestTimesheet.csproj | head -1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
+
+      - name: Restore
+        run: dotnet restore src/TheNerdCollective.MudComponents.HarvestTimesheet
+
+      - name: Build
+        run: dotnet build src/TheNerdCollective.MudComponents.HarvestTimesheet -c Release --no-restore
+
+      - name: Pack
+        run: dotnet pack src/TheNerdCollective.MudComponents.HarvestTimesheet -c Release -o artifacts --no-build
+
+      - name: NuGet Login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: janhjordie
+
+      - name: Push to NuGet
+        run: |
+          for nupkg in artifacts/*.nupkg; do
+            dotnet nuget push "$nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - name: Create Git Tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -d "harvest-timesheet-v${{ steps.version.outputs.version }}" 2>/dev/null || true
+          git push origin :refs/tags/"harvest-timesheet-v${{ steps.version.outputs.version }}" 2>/dev/null || true
+          git tag -a "harvest-timesheet-v${{ steps.version.outputs.version }}" -m "HarvestTimesheet ${{ steps.version.outputs.version }}"
+          git push origin "harvest-timesheet-v${{ steps.version.outputs.version }}"
