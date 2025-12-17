@@ -38,13 +38,22 @@ jobs:
       - name: Pack
         run: dotnet pack src/TheNerdCollective.Services -c Release -o artifacts --no-build
 
+      - name: Get OIDC Token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://api.nuget.org/v3/index.json');
+            core.setSecret(token);
+            core.setOutput('token', token);
+
       - name: Push to NuGet
+        env:
+          NUGET_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           for nupkg in artifacts/*.nupkg; do
-            dotnet nuget push "$nupkg" --source https://api.nuget.org/v3/index.json --skip-duplicate
+            dotnet nuget push "$nupkg" -s https://api.nuget.org/v3/index.json -k "$NUGET_TOKEN" --skip-duplicate
           done
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.NUGET_PUBLISH_KEY }}
 
       - name: Create Git Tag
         run: |
