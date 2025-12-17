@@ -168,11 +168,13 @@ public class TimesheetEntry
   public long UserId { get; set; }
   public string UserName { get; set; }
   public string ProjectName { get; set; }
+  public string ProjectCode { get; set; }
   public string TaskName { get; set; }
   public string Notes { get; set; }
   public string ExternalReferencePermalink { get; set; }
   public string ExternalReferenceService { get; set; }
   public string ExternalReferenceServiceIconUrl { get; set; }
+  public string ExternalReferenceAccountId { get; set; }
   public string RawEntryJson { get; set; }
   public decimal Hours { get; set; }
   public decimal HoursWithoutTimer { get; set; }

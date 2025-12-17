@@ -16,11 +16,13 @@ public class TimesheetEntry
     public long UserId { get; set; }
     public string UserName { get; set; } = string.Empty;
     public string ProjectName { get; set; } = string.Empty;
+    public string ProjectCode { get; set; } = string.Empty;
     public string TaskName { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
     public string ExternalReferencePermalink { get; set; } = string.Empty;
     public string ExternalReferenceService { get; set; } = string.Empty;
     public string ExternalReferenceServiceIconUrl { get; set; } = string.Empty;
+    public string ExternalReferenceAccountId { get; set; } = string.Empty;
     public string RawEntryJson { get; set; } = string.Empty;
     public decimal HoursWithoutTimer { get; set; }
     public decimal RoundedHours { get; set; }
@@ -153,6 +155,7 @@ public class HarvestProject
 {
     public long Id { get; set; }
     public string? Name { get; set; }
+    public string? Code { get; set; }
 }
 
 /// <summary>
@@ -246,6 +249,9 @@ public class HarvestExternalReference
 
     public string? Service { get; set; }
     public string? Permalink { get; set; }
+
+    [JsonPropertyName("account_id")]
+    public string? AccountId { get; set; }
 
     [JsonPropertyName("service_icon_url")]
     public string? ServiceIconUrl { get; set; }
