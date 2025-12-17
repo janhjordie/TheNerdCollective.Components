@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>TheNerdCollective.Integrations.Harvest</PackageId>
-    <Version>1.0.9</Version>
+    <Version>1.0.10</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>Integration service for GetHarvest.com API v2, providing timesheet and project management capabilities.</Description>
     <PackageTags>harvest;timesheet;integration;api</PackageTags>

@@ -157,23 +157,62 @@ Store secrets locally without committing to repository:
 ## Models
 
 ### TimesheetEntry
-Represents a timesheet entry with all relevant information.
+Represents a Harvest time entry. All relevant fields from the Harvest API are surfaced for downstream use and debugging (including Trello links via `ExternalReference*`).
 
 ```csharp
 public class TimesheetEntry
 {
-    public long Id { get; set; }
-    public long ProjectId { get; set; }
-    public long TaskId { get; set; }
-    public long UserId { get; set; }
-    public string UserName { get; set; }
-    public string ProjectName { get; set; }
-    public string TaskName { get; set; }
-    public string Notes { get; set; }
-    public decimal Hours { get; set; }
-    public DateTime SpentDate { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
+  public long Id { get; set; }
+  public long ProjectId { get; set; }
+  public long TaskId { get; set; }
+  public long UserId { get; set; }
+  public string UserName { get; set; }
+  public string ProjectName { get; set; }
+  public string TaskName { get; set; }
+  public string Notes { get; set; }
+  public string ExternalReferencePermalink { get; set; }
+  public string ExternalReferenceService { get; set; }
+  public string ExternalReferenceServiceIconUrl { get; set; }
+  public string RawEntryJson { get; set; }
+  public decimal Hours { get; set; }
+  public decimal HoursWithoutTimer { get; set; }
+  public decimal RoundedHours { get; set; }
+  public bool IsLocked { get; set; }
+  public string LockedReason { get; set; }
+  public string ApprovalStatus { get; set; }
+  public bool IsClosed { get; set; }
+  public bool IsBilled { get; set; }
+  public string TimerStartedAt { get; set; }
+  public string StartedTime { get; set; }
+  public string EndedTime { get; set; }
+  public bool IsRunning { get; set; }
+  public bool Billable { get; set; }
+  public bool Budgeted { get; set; }
+  public decimal? BillableRate { get; set; }
+  public decimal? CostRate { get; set; }
+  public long ClientId { get; set; }
+  public string ClientName { get; set; }
+  public string ClientCurrency { get; set; }
+  public long UserAssignmentId { get; set; }
+  public bool? UserAssignmentIsProjectManager { get; set; }
+  public bool? UserAssignmentIsActive { get; set; }
+  public bool? UserAssignmentUseDefaultRates { get; set; }
+  public decimal? UserAssignmentBudget { get; set; }
+  public decimal? UserAssignmentHourlyRate { get; set; }
+  public DateTime? UserAssignmentCreatedAt { get; set; }
+  public DateTime? UserAssignmentUpdatedAt { get; set; }
+  public long TaskAssignmentId { get; set; }
+  public bool? TaskAssignmentBillable { get; set; }
+  public bool? TaskAssignmentIsActive { get; set; }
+  public decimal? TaskAssignmentHourlyRate { get; set; }
+  public decimal? TaskAssignmentBudget { get; set; }
+  public DateTime? TaskAssignmentCreatedAt { get; set; }
+  public DateTime? TaskAssignmentUpdatedAt { get; set; }
+  public long? InvoiceId { get; set; }
+  public string InvoiceNumber { get; set; }
+  public DateTime SpentDate { get; set; }
+  public DateTime CreatedAt { get; set; }
+  public DateTime UpdatedAt { get; set; }
 }
 ```
 
