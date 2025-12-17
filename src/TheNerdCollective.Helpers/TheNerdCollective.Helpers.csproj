@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>TheNerdCollective.Helpers</PackageId>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>Utility helpers for common operations including file I/O, date/time formatting, stream/byte conversions, and CSV handling.</Description>
     <PackageTags>helpers;utilities;csv;file-io;streams</PackageTags>
