@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>TheNerdCollective.MudComponents.HarvestTimesheet</PackageId>
-    <Version>1.0.14</Version>
+    <Version>1.0.15</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>MudBlazor component for displaying and managing timesheet entries from GetHarvest API.</Description>
     <PackageTags>mudblazor;blazor;timesheet;harvest</PackageTags>
