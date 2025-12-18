@@ -4,7 +4,15 @@ A MudBlazor component for displaying and managing timesheet entries from the Get
 
 ## Overview
 
-TheNerdCollective.MudComponents.HarvestTimesheet provides a beautiful, interactive Blazor component that displays timesheet data with month navigation, hourly summaries, and billable vs. unbilled hour tracking.
+TheNerdCollective.MudComponents.HarvestTimesheet is designed for clients of The Nerd Collective to gain complete transparency into their projects. This component enables clients to:
+
+- **Track Time Usage** - See exactly how many hours we've invested in each project
+- **View Work Details** - Understand what tasks we're working on and the exact nature of each work item
+- **Access Trello Integration** - Click directly to Trello cards for immediate access to task details and discussions
+- **Monitor Billable Hours** - Clearly distinguish between billable and unbilled/discounted hours
+- **Navigate Flexibly** - Review timesheets across different months and time periods
+
+Built with a beautiful, interactive interface powered by MudBlazor, it provides a transparent window into The Nerd Collective's work on your projects.
 
 ## Screenshots
 
