@@ -25,19 +25,20 @@ dotnet add package TheNerdCollective.MudComponents.HarvestTimesheet
 </head>
 ```
 
-2. **Configure Harvest Integration** (required):
+2. **Configure Harvest Integration** in `appsettings.json` (required):
+
+Basic configuration with project IDs and no password protection:
 ```json
 {
   "Harvest": {
     "ApiToken": "your_api_token",
     "AccountId": "your_account_id",
-    "ProjectIds": [123456, 789012],
-    "Password": null
+    "ProjectIds": [123456, 789012]
   }
 }
 ```
 
-**Optional Password Protection:**
+With optional password protection:
 ```json
 {
   "Harvest": {
@@ -49,9 +50,11 @@ dotnet add package TheNerdCollective.MudComponents.HarvestTimesheet
 }
 ```
 
-When `Password` is set, users must enter the password before accessing the timesheet list.
-
-You can override the configured `ProjectIds` per component instance if you need different project scopes on the same page.
+Configuration reference:
+- **ApiToken** (required): Get from https://help.getharvest.com/api-v2/authentication-api/authentication/authentication/
+- **AccountId** (required): Found in your Harvest account settings
+- **ProjectIds** (optional): List of project IDs to track. Can be overridden per component with the `ProjectIds` parameter
+- **Password** (optional): Leave empty/null to disable password protection. When set, users must enter this password to view timesheets
 
 3. **Register Services** in Program.cs:
 ```csharp
@@ -77,12 +80,15 @@ var app = builder.Build();
 ## Features
 
 - **Month Navigation** - Navigate between months to view different timesheet periods
-- **Entry Details** - View dates, projects, tasks, users, and notes
+- **Entry Details** - View dates, projects, tasks, users, notes, and linked Trello cards
 - **Billable Tracking** - Automatically separates billable and unbilled hours
 - **Hour Summaries** - Displays total hours, billable hours, and unbilled hours
+- **Password Protection** - Optional password protection for sensitive timesheet data (configurable via appsettings)
 - **Responsive Design** - Adapts to mobile, tablet, and desktop screens
 - **Loading States** - Shows loading indicator while fetching data
 - **Empty States** - Handles empty timesheet periods gracefully
+- **Debug Panel** - Optional raw JSON data inspection for troubleshooting
+- **Flexible Configuration** - Per-component parameter overrides for ProjectIds, ShowDebugPanel, and more
 
 ## Component Parameters
 
@@ -128,6 +134,22 @@ Controls whether the debug panel with raw Harvest JSON data is visible. Defaults
 
 ## Customization
 
+### Security: Password Protection
+By default, the timesheet is public. Enable password protection by setting the `Password` field in appsettings:
+
+```json
+{
+  "Harvest": {
+    "ApiToken": "your_api_token",
+    "AccountId": "your_account_id",
+    "ProjectIds": [123456, 789012],
+    "Password": "MySecurePassword123"
+  }
+}
+```
+
+When enabled, users will be prompted with a password form before the timesheet is displayed. The component handles password verification client-side; for production, consider additional security measures.
+
 ### Styling
 The component uses MudBlazor's theming system. Customize colors and spacing through your MudBlazor theme configuration.
 
@@ -139,6 +161,17 @@ By default, tasks containing "(U/B)" (Danish: uden betaling - without payment) a
 <TimesheetDisplay UnbilledKeyword="[NO-PAY]" />
 ```
 
+### Advanced: Multiple Timesheet Instances
+You can display different projects on the same page by using the `ProjectIds` parameter:
+
+```razor
+<!-- Project A timesheet -->
+<TimesheetDisplay ProjectIds="new long[] { 123456 }" />
+
+<!-- Project B timesheet -->
+<TimesheetDisplay ProjectIds="new long[] { 789012 }" />
+```
+
 ## Required Dependencies
 
 - **TheNerdCollective.Integrations.Harvest** 0.1.0+
@@ -146,36 +179,62 @@ By default, tasks containing "(U/B)" (Danish: uden betaling - without payment) a
 - **Blazor** (Web App)
 - **.NET** 10.0+
 
-## Usage Example
+## Usage Examples
 
-### Complete Integration
+### Complete Integration (Default)
 ```razor
 @page "/timesheets"
 @using TheNerdCollective.MudComponents.HarvestTimesheet
 
 <PageTitle>Timesheets</PageTitle>
 
-<TimesheetDisplay InitialDate="new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1)" />
+<TimesheetDisplay />
 
 @code {
     // Component handles all logic internally
 }
 ```
 
-### In a Page with Other Content
+### With Password Protection Enabled
+When a password is configured in appsettings, users see this automatically:
+
+```razor
+@page "/timesheets"
+@using TheNerdCollective.MudComponents.HarvestTimesheet
+
+<!-- Shows password prompt first, then timesheet after verification -->
+<TimesheetDisplay />
+```
+
+### With Custom Parameters
+```razor
+@page "/timesheets"
+@using TheNerdCollective.MudComponents.HarvestTimesheet
+
+<TimesheetDisplay 
+    InitialDate="new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1)"
+    ProjectIds="new long[] { 123456, 789012 }"
+    UnbilledKeyword="[U/B]"
+    ShowDebugPanel="false" />
+```
+
+### In a Dashboard with Tabs
 ```razor
 @page "/dashboard"
 @using TheNerdCollective.MudComponents.HarvestTimesheet
 
 <MudContainer>
-    <MudText Typo="Typo.h3" Class="mb-6">My Dashboard</MudText>
+    <MudText Typo="Typo.h3" Class="mb-6">Dashboard</MudText>
     
     <MudTabs>
         <MudTabPanel Text="Overview">
-            <!-- Dashboard content -->
+            <!-- Dashboard overview content -->
         </MudTabPanel>
         <MudTabPanel Text="Timesheets">
             <TimesheetDisplay />
+        </MudTabPanel>
+        <MudTabPanel Text="Advanced">
+            <TimesheetDisplay ShowDebugPanel="true" />
         </MudTabPanel>
     </MudTabs>
 </MudContainer>
