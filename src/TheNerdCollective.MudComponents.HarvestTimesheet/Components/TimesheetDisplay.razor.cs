@@ -41,9 +41,10 @@ public partial class TimesheetDisplay : ComponentBase
 
     /// <summary>
     /// Optional project IDs to load timesheets for. When provided, overrides appsettings configuration.
+    /// Format: comma-separated list of project IDs (e.g., "123456,789012")
     /// </summary>
     [Parameter]
-    public IEnumerable<long>? ProjectIds { get; set; }
+    public string? ProjectIds { get; set; }
 
     /// <summary>
     /// Gets or sets whether to show the debug panel with raw Harvest JSON data.
@@ -144,12 +145,16 @@ public partial class TimesheetDisplay : ComponentBase
 
     private bool ApplyProjectIdsOverride()
     {
-        if (ProjectIds == null)
+        if (string.IsNullOrWhiteSpace(ProjectIds))
         {
             return false;
         }
 
         var incoming = ProjectIds
+            .Split(',', System.StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => long.TryParse(s, out _))
+            .Select(long.Parse)
             .Where(id => id > 0)
             .Distinct()
             .ToList();

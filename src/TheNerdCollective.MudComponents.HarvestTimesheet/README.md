@@ -111,14 +111,14 @@ The keyword used to identify unbilled/without payment hours in task names. Defau
 ```
 
 ### `ProjectIds`
-Optional override for the Harvest project IDs to fetch. When provided, these IDs take precedence over the values from appsettings.
+Optional override for the Harvest project IDs to fetch. Accepts a comma-separated list of project IDs. When provided, these IDs take precedence over the values from appsettings.
 
 ```razor
 <!-- Use project IDs from appsettings.json -->
 <TimesheetDisplay />
 
 <!-- Override project IDs per instance -->
-<TimesheetDisplay ProjectIds="new long[] { 123456, 789012 }" />
+<TimesheetDisplay ProjectIds="123456,789012" />
 ```
 
 ### `ShowDebugPanel`
@@ -166,10 +166,10 @@ You can display different projects on the same page by using the `ProjectIds` pa
 
 ```razor
 <!-- Project A timesheet -->
-<TimesheetDisplay ProjectIds="new long[] { 123456 }" />
+<TimesheetDisplay ProjectIds="123456" />
 
 <!-- Project B timesheet -->
-<TimesheetDisplay ProjectIds="new long[] { 789012 }" />
+<TimesheetDisplay ProjectIds="789012" />
 ```
 
 ## Required Dependencies
@@ -213,7 +213,7 @@ When a password is configured in appsettings, users see this automatically:
 
 <TimesheetDisplay 
     InitialDate="new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1)"
-    ProjectIds="new long[] { 123456, 789012 }"
+    ProjectIds="123456,789012"
     UnbilledKeyword="[U/B]"
     ShowDebugPanel="false" />
 ```
