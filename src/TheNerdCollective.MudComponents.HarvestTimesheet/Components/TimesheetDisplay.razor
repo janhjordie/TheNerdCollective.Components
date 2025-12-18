@@ -29,10 +29,6 @@
         }
         else
         {
-            <MudPaper Class="pa-4 mb-6">
-                <MudSwitch T="bool" @bind-Value="ShowDebugPanel" Color="Color.Info" Label="Show debug panel (raw Harvest data)" />
-            </MudPaper>
-
             @* Month & Year Selection *@
         <MudPaper Class="pa-6 mb-6">
             <MudGrid>
@@ -145,7 +141,7 @@
                         <MudExpansionPanels MultiExpansion="true" Elevation="0">
                             @foreach (var entry in Timesheets)
                             {
-                                <MudExpansionPanel Text="@($"{entry.SpentDate:dd/MM/yyyy} - {entry.ProjectName} - {entry.TaskName}")">
+                                <MudExpansionPanel Text="@($"{entry.SpentDate:dd/MM/yyyy} - {entry.ProjectName} - {entry.TaskName}")" IsInitiallyExpanded="true">
                                     <pre class="mud-pre" style="white-space: pre-wrap; word-break: break-word;">@entry.RawEntryJson</pre>
                                 </MudExpansionPanel>
                             }

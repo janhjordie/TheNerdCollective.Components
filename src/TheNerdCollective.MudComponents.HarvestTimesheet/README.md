@@ -122,13 +122,13 @@ Optional override for the Harvest project IDs to fetch. Accepts a comma-separate
 ```
 
 ### `ShowDebugPanel`
-Controls whether the debug panel with raw Harvest JSON data is visible. Defaults to `false`. When set to `true`, the debug panel displays by default (users can still toggle it off with the switch).
+Controls whether the debug panel with raw Harvest JSON data is visible. Defaults to `false`. When set to `true`, the debug panel displays with all entries expanded by default. This is useful for troubleshooting and inspecting raw API responses.
 
 ```razor
 <!-- Hide debug panel (default) -->
 <TimesheetDisplay />
 
-<!-- Show debug panel by default -->
+<!-- Show debug panel with expanded entries -->
 <TimesheetDisplay ShowDebugPanel="true" />
 ```
 
