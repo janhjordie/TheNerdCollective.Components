@@ -1,12 +1,17 @@
 # TheNerdCollective.Services
 
-A foundational services library providing base service abstractions, utilities, and integration helpers for The Nerd Collective component ecosystem. Includes Azure Blob Storage integration and configuration support.
+A comprehensive services library providing foundational abstractions, utilities, and integration helpers for building scalable applications.
 
 ## Overview
 
-TheNerdCollective.Services provides essential service infrastructure for building robust, scalable applications. It includes abstractions, implementations, and extensions for common service patterns.
+TheNerdCollective.Services provides essential service infrastructure as a collection of specialized packages. Choose the package that matches your needs:
 
-## Quick Start
+- **TheNerdCollective.Services** - Core Azure Blob Storage and configuration support
+- **TheNerdCollective.Services.BlazorServer** - Blazor Server circuit configuration and graceful shutdown
+
+## TheNerdCollective.Services
+
+Core service library with Azure Blob Storage integration.
 
 ### Installation
 
@@ -14,63 +19,92 @@ TheNerdCollective.Services provides essential service infrastructure for buildin
 dotnet add package TheNerdCollective.Services
 ```
 
-### Service Registration
-
-Add services to your dependency injection container:
+### Setup
 
 ```csharp
 using TheNerdCollective.Services.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Register services
 builder.Services.AddNerdCollectiveServices();
 
 var app = builder.Build();
 ```
 
-## Included Services
+### Features
 
-### Azure Blob Storage Integration
+✅ **Azure Blob Storage Service** - Upload, download, and manage blobs  
+✅ **Type-Safe Configuration** - `AzureBlobOptions` with validation  
+✅ **Extension Methods** - Easy service registration  
+✅ **DI Compatible** - Built for ASP.NET Core dependency injection  
 
-Access Azure Blob Storage with easy configuration:
+### Configuration
 
-```csharp
-// Configure in appsettings.json
+```json
 {
   "AzureBlob": {
     "ConnectionString": "DefaultEndpointsProtocol=https;..."
   }
 }
+```
 
-// Use in your services
+### Usage
+
+```csharp
 var blobService = serviceProvider.GetRequiredService<IAzureBlobService>();
 await blobService.UploadAsync("container", "file.txt", stream);
 ```
 
-### Configuration Support
+---
 
-Built-in support for options patterns and configuration binding:
+## TheNerdCollective.Services.BlazorServer
 
-```csharp
-var options = serviceProvider.GetRequiredService<IOptions<AzureBlobOptions>>();
-var connectionString = options.Value.ConnectionString;
+Specialized service library for Blazor Server circuit management and graceful shutdown.
+
+### Installation
+
+```bash
+dotnet add package TheNerdCollective.Services.BlazorServer
 ```
 
-## Features
+### Setup
 
-- **Azure Blob Storage Service** - Upload, download, and manage blobs
-- **Configuration Options** - Type-safe configuration with `AzureBlobOptions`
-- **Extension Methods** - Easy service registration with `ServiceCollectionExtensions`
-- **Dependency Injection Ready** - Fully compatible with ASP.NET Core DI container
+```csharp
+using TheNerdCollective.Services.BlazorServer;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddBlazorServerServices(builder.Configuration, builder.Environment);
+builder.Host.ConfigureBlazorServerShutdown();
+
+var app = builder.Build();
+```
+
+### Features
+
+✅ **Circuit Configuration** - Sensible defaults for production Blazor Server apps  
+✅ **Graceful Shutdown** - Coordinated cleanup when app terminates  
+✅ **Configurable Options** - Customize via `CircuitOptions` section  
+✅ **Framework Agnostic** - Works with any Blazor Server host  
+
+### Configuration
+
+```json
+{
+  "CircuitOptions": {
+    "DisconnectedCircuitRetentionPeriod": "00:10:00",
+    "JSInteropDefaultCallTimeout": "00:00:30"
+  }
+}
+```
+
+---
 
 ## Dependencies
 
-- **Azure.Storage.Blobs** 12.23.0
+- **Azure.Storage.Blobs** 12.23.0 (Services only)
 - **Microsoft.Extensions.Options** 10.0.0
 - **Microsoft.Extensions.Configuration** 10.0.0
-- **System.ComponentModel.Annotations** 5.0.0
-- **TheNerdCollective.Helpers** (internal)
+- **Microsoft.AspNetCore.App** (BlazorServer only)
 - **.NET** 10.0+
 
 ## License

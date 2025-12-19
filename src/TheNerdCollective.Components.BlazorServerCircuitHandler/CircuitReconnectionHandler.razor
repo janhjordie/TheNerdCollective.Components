@@ -1,0 +1,24 @@
+@implements IAsyncDisposable
+
+<script src="_content/TheNerdCollective.Components.BlazorServerCircuitHandler/js/blazor-reconnect.js"></script>
+
+@code {
+    /// <summary>
+    /// Initializes the Blazor Server Circuit Reconnection Handler.
+    /// This component loads the JavaScript reconnection handler that provides:
+    /// - Automatic reconnection with exponential backoff (1s → 5s max)
+    /// - Professional reconnection UI overlay after 5 silent attempts
+    /// - Error suppression for expected disconnection errors
+    /// - Graceful fallback when circuits expire
+    /// 
+    /// Simply add this component to your App.razor or root layout:
+    /// &lt;CircuitReconnectionHandler /&gt;
+    /// 
+    /// The handler automatically starts when the app initializes and requires no additional configuration.
+    /// </summary>
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        // Component cleanup if needed
+        await Task.CompletedTask;
+    }
+}

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TheNerdCollective.Components.BlazorServerCircuitHandler</RootNamespace>
+    <AssemblyName>TheNerdCollective.Components.BlazorServerCircuitHandler</AssemblyName>
+    <Version>1.0.0</Version>
+    <Authors>Jan Hjørdie</Authors>
+    <Description>A complete Blazor Server circuit reconnection handler with auto-reconnect UI and graceful error handling. Includes JavaScript reconnection logic with exponential backoff and professional reconnection overlays.</Description>
+    <PackageProjectUrl>https://github.com/janhjordie/TheNerdCollective.Components</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/janhjordie/TheNerdCollective.Components</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>blazor;circuit;reconnection;signalr;handler;ui</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>
