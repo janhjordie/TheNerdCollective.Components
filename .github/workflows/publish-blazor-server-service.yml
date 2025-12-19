@@ -1,0 +1,83 @@
+name: Publish Blazor Server Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/TheNerdCollective.Services.BlazorServer/**'
+      - '.github/workflows/publish-blazor-server-service.yml'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish-blazor-server-service:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Get Version from csproj
+        id: version
+        run: |
+          VERSION=$(grep -oP '<Version>\K[^<]+' src/TheNerdCollective.Services.BlazorServer/TheNerdCollective.Services.BlazorServer.csproj | head -1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
+
+      - name: Restore
+        run: dotnet restore src/TheNerdCollective.Services.BlazorServer
+
+      - name: Build
+        run: dotnet build src/TheNerdCollective.Services.BlazorServer -c Release --no-restore
+
+      - name: Pack
+        run: dotnet pack src/TheNerdCollective.Services.BlazorServer -c Release -o artifacts --no-build
+
+      - name: Configure NuGet Sources
+        run: dotnet nuget update source nuget.org -s https://api.nuget.org/v3/index.json --configfile ./NuGet.config 2>/dev/null || dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org --configfile ./NuGet.config
+
+      - name: Diagnostics
+        env:
+          NUGET_SECRET: ${{ secrets.NUGET }}
+        run: |
+          set -euo pipefail
+          echo "dotnet --info"
+          dotnet --info
+          echo "NuGet sources (configfile ./NuGet.config):"
+          dotnet nuget list source --configfile ./NuGet.config
+          echo "GitHub context: repo=$GITHUB_REPOSITORY workflow=$GITHUB_WORKFLOW ref=$GITHUB_REF run_attempt=$GITHUB_RUN_ATTEMPT"
+          SECRET_LEN=0
+          if [ -n "${NUGET_SECRET:-}" ]; then SECRET_LEN=${#NUGET_SECRET}; fi
+          echo "NUGET secret length: $SECRET_LEN"
+
+      - name: Push to NuGet
+        env:
+          NUGET_SECRET: ${{ secrets.NUGET }}
+        run: |
+          set -euo pipefail
+          TOKEN=${NUGET_SECRET:-}
+          if [ -z "$TOKEN" ]; then
+            echo "No token available (NUGET secret)" >&2
+            exit 1
+          fi
+          echo "Using token from: secret"
+          for nupkg in artifacts/*.nupkg; do
+            dotnet nuget push "$nupkg" --source https://api.nuget.org/v3/index.json --api-key "$TOKEN" --skip-duplicate
+          done
+
+      - name: Create Git Tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -d "blazor-server-service-v${{ steps.version.outputs.version }}" 2>/dev/null || true
+          git push origin :refs/tags/"blazor-server-service-v${{ steps.version.outputs.version }}" 2>/dev/null || true
+          git tag -a "blazor-server-service-v${{ steps.version.outputs.version }}" -m "BlazorServer Service ${{ steps.version.outputs.version }}"
+          git push origin "blazor-server-service-v${{ steps.version.outputs.version }}"
