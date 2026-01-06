@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageId>TheNerdCollective.Integrations.AzurePipelines</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>The Nerd Collective</Authors>
+    <Description>Integration service for Azure Pipelines REST API, providing pipeline management and run monitoring capabilities.</Description>
+    <PackageTags>azure;pipelines;devops;integration;api</PackageTags>
+    <License>Apache-2.0</License>
+    <LicenseExpression>Apache-2.0</LicenseExpression>
+    <RepositoryUrl>https://github.com/The-Nerd-Collective/TheNerdCollective.Components</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

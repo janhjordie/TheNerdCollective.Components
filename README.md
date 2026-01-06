@@ -55,14 +55,14 @@ Each package has its own README with detailed setup instructions, examples, and 
 
 ## 🎮 Try the Demo
 
-A fully-featured demo app showcases all components with interactive examples:
+A demo app is available showcasing the MudQuillEditor component with interactive examples:
 
 ```bash
 cd src/TheNerdCollective.Demo
 dotnet run
 ```
 
-Visit `https://localhost:5001` to explore features, test configurations, and see live previews.
+Visit `https://localhost:5001` to explore the MudQuillEditor features, test configurations, and see live previews.
 
 ## License
 
