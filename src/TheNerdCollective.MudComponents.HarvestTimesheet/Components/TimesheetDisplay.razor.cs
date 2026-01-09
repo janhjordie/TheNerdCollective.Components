@@ -18,6 +18,8 @@ public partial class TimesheetDisplay : ComponentBase
     [Inject] private IOptions<HarvestOptions> HarvestOptions { get; set; } = null!;
 
     private List<TimesheetEntry> Timesheets = new();
+    private List<string> AvailableProjects = new();
+    private IEnumerable<string> _selectedProjects = new List<string>();
     private DateTime? SelectedDate = DateTime.Now;
     private bool IsLoading = false;
     private readonly List<long> _appliedProjectIds = new();
@@ -110,6 +112,17 @@ public partial class TimesheetDisplay : ComponentBase
             var lastDay = firstDay.AddMonths(1).AddDays(-1);
 
             Timesheets = await HarvestService.GetTimesheetEntriesAsync(firstDay, lastDay);
+            
+            // Extract unique projects and select all by default
+            AvailableProjects = Timesheets
+                .Select(t => t.ProjectName)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .Distinct()
+                .OrderBy(p => p)
+                .ToList();
+            
+            // Select all projects by default
+            _selectedProjects = new List<string>(AvailableProjects);
         }
         catch (Exception ex)
         {
@@ -147,6 +160,28 @@ public partial class TimesheetDisplay : ComponentBase
         .Sum(t => t.Hours));
 
     private decimal BillableHours => TotalHours - UnbilledHours;
+
+    private List<TimesheetEntry> FilteredTimesheets => Timesheets
+        .Where(t => _selectedProjects.Contains(t.ProjectName ?? string.Empty))
+        .ToList();
+
+    private decimal GetFilteredTotalHours() => RoundHoursToInterval(FilteredTimesheets.Sum(t => t.Hours));
+
+    private decimal GetFilteredUnbilledHours() => RoundHoursToInterval(FilteredTimesheets
+        .Where(t => t.TaskName?.Contains(UnbilledKeyword) ?? false)
+        .Sum(t => t.Hours));
+
+    private decimal GetFilteredBillableHours() => GetFilteredTotalHours() - GetFilteredUnbilledHours();
+
+    private string GetProjectsDisplayText(List<string> selected)
+    {
+        return selected.Count switch
+        {
+            0 => "No projects selected",
+            1 => selected[0],
+            _ => $"{selected.Count} projects selected"
+        };
+    }
 
     private decimal RoundHoursToInterval(decimal hours)
     {

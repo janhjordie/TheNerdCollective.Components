@@ -51,6 +51,22 @@
             </MudGrid>
         </MudPaper>
 
+        @* Project Filter - Only show if more than one project *@
+        @if (AvailableProjects.Count > 1)
+        {
+            <MudPaper Class="pa-6 mb-6">
+                <MudSelect T="string" MultiSelection="true" SelectAll="true" SelectAllText="Select All Projects"
+                           @bind-SelectedValues="_selectedProjects" Label="Filter by Projects" 
+                           Variant="Variant.Outlined" HelperText="Select projects to display"
+                           Dense="true" MultiSelectionTextFunc="@(new Func<List<string>, string>(GetProjectsDisplayText))">
+                    @foreach (var project in AvailableProjects)
+                    {
+                        <MudSelectItem T="string" Value="@project">@project</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudPaper>
+        }
+
         @* Timesheet Table *@
         @if (IsLoading)
         {
@@ -61,10 +77,14 @@
         {
             <MudAlert Severity="Severity.Info">No timesheet entries found for the selected month.</MudAlert>
         }
+        else if (FilteredTimesheets.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No timesheet entries found for the selected projects.</MudAlert>
+        }
         else
         {
             <MudPaper Class="pa-6 mb-6">
-                <MudTable Items="Timesheets" Hover="true" Striped="true" Bordered="true" Dense="true">
+                <MudTable Items="FilteredTimesheets" Hover="true" Striped="true" Bordered="true" Dense="true">
                     <HeaderContent>
                         <MudTh>Date</MudTh>
                         <MudTh>Project</MudTh>
@@ -110,25 +130,25 @@
                         <MudItem xs="12" sm="6" md="3">
                             <MudText Typo="Typo.subtitle2">Billable Hours</MudText>
                             <MudText Typo="Typo.h5" Color="Color.Success">
-                                <strong>@BillableHours.ToString("F2")</strong>
+                                <strong>@GetFilteredBillableHours().ToString("F2")</strong>
                             </MudText>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="3">
                             <MudText Typo="Typo.subtitle2">Total Hours</MudText>
                             <MudText Typo="Typo.h5" Color="Color.Primary">
-                                <strong>@TotalHours.ToString("F2")</strong>
+                                <strong>@GetFilteredTotalHours().ToString("F2")</strong>
                             </MudText>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="3">
                             <MudText Typo="Typo.subtitle2">Hours (U/B)</MudText>
                             <MudText Typo="Typo.h5" Color="Color.Warning">
-                                <strong>@UnbilledHours.ToString("F2")</strong>
+                                <strong>@GetFilteredUnbilledHours().ToString("F2")</strong>
                             </MudText>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="3">
                             <MudText Typo="Typo.subtitle2">Entries</MudText>
                             <MudText Typo="Typo.h5">
-                                <strong>@Timesheets.Count</strong>
+                                <strong>@FilteredTimesheets.Count</strong>
                             </MudText>
                         </MudItem>
                     </MudGrid>
@@ -151,7 +171,7 @@
                             <MudExpansionPanels MultiExpansion="true" Elevation="0">
                                 @foreach (var entry in Timesheets)
                                 {
-                                    <MudExpansionPanel Text="@($"{entry.SpentDate:dd/MM/yyyy} - {entry.ProjectName} - {entry.TaskName}")" IsInitiallyExpanded="true">
+                                    <MudExpansionPanel Text="@($"{entry.SpentDate:dd/MM/yyyy} - {entry.ProjectName} - {entry.TaskName}")" InitiallyExpanded="true">
                                         <pre class="mud-pre" style="white-space: pre-wrap; word-break: break-word;">@entry.RawEntryJson</pre>
                                     </MudExpansionPanel>
                                 }
