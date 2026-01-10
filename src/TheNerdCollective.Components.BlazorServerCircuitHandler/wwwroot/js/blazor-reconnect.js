@@ -402,9 +402,11 @@
 
         reconnectModal = document.createElement('div');
         reconnectModal.id = 'blazor-reconnect-modal';
+        
         // Try to load status to decide which UI to show
+        let status = null;
         try {
-            const status = await checkReconnectionStatus();
+            status = await checkReconnectionStatus();
             reconnectModal.innerHTML = getStatusHtml(status);
         } catch {
             reconnectModal.innerHTML = config.reconnectingHtml || getDefaultReconnectingHtml();
@@ -423,7 +425,71 @@
             window.location.reload();
         });
         
-        startCountdown();
+        // If deployment mode, start polling for completion
+        if (status && isDeploying(status)) {
+            console.log('[CircuitHandler] Starting deployment completion polling...');
+            lastVersion = status.version;
+            
+            statusCheckInterval = setInterval(async () => {
+                const newStatus = await checkReconnectionStatus();
+                
+                if (!newStatus) {
+                    console.log('[CircuitHandler] Status file removed, reloading...');
+                    clearInterval(statusCheckInterval);
+                    window.location.reload();
+                    return;
+                }
+                
+                // Check if version changed or no longer deploying
+                if (newStatus.version !== lastVersion || !isDeploying(newStatus)) {
+                    console.log('[CircuitHandler] Deployment completed (status changed), reloading...');
+                    clearInterval(statusCheckInterval);
+                    window.location.reload();
+                    return;
+                }
+                
+                // CRITICAL: Test if new site is live by attempting circuit reconnect
+                try {
+                    const healthCheck = await fetch(window.location.origin + '/health', {
+                        method: 'HEAD',
+                        cache: 'no-cache',
+                        signal: AbortSignal.timeout(3000)
+                    });
+                    
+                    if (healthCheck.ok) {
+                        console.log('[CircuitHandler] Health check OK, testing if new server is live...');
+                        
+                        try {
+                            const reconnectResult = await Blazor.reconnect();
+                            
+                            if (reconnectResult === false) {
+                                // Circuit rejected = new server is live
+                                console.log('[CircuitHandler] New server detected (circuit rejected), reloading...');
+                                clearInterval(statusCheckInterval);
+                                window.location.reload();
+                                return;
+                            } else if (reconnectResult === true) {
+                                // Reconnected to old server - keep waiting
+                                console.log('[CircuitHandler] Still on old server, waiting for traffic switch...');
+                            }
+                        } catch (err) {
+                            // Circuit error = new server
+                            if (err?.toString().includes('circuit') || err?.toString().includes('expired')) {
+                                console.log('[CircuitHandler] Circuit error = new server is live, reloading...');
+                                clearInterval(statusCheckInterval);
+                                window.location.reload();
+                                return;
+                            }
+                        }
+                    }
+                } catch (healthError) {
+                    console.log('[CircuitHandler] Health check failed, will retry...');
+                }
+            }, config.statusPollInterval);
+        } else {
+            // Normal reconnection mode - start countdown
+            startCountdown();
+        }
     }
 
     // Countdown timer
@@ -721,9 +787,51 @@
                             
                             // Check if version changed or no longer deploying
                             if (status.version !== lastVersion || !isDeploying(status)) {
-                                console.log('[CircuitHandler] Deployment completed, reloading...');
+                                console.log('[CircuitHandler] Deployment completed (version or status changed), reloading...');
                                 clearInterval(statusCheckInterval);
                                 window.location.reload();
+                                return;
+                            }
+                            
+                            // CRITICAL: Check if new site is responding (blue-green traffic switch)
+                            // Even if status file still says "deploying", the new container might be live
+                            try {
+                                const healthCheck = await fetch(window.location.origin + '/health', {
+                                    method: 'HEAD',
+                                    cache: 'no-cache',
+                                    signal: AbortSignal.timeout(3000)
+                                });
+                                
+                                // Check if we're hitting a different container (new deployment)
+                                // by trying to reconnect - if circuit is rejected, it means new server
+                                if (healthCheck.ok) {
+                                    console.log('[CircuitHandler] Health check OK, testing circuit...');
+                                    
+                                    try {
+                                        const reconnectResult = await Blazor.reconnect();
+                                        
+                                        if (reconnectResult === false) {
+                                            // Circuit rejected = new server version is live
+                                            console.log('[CircuitHandler] New server detected (circuit rejected), reloading...');
+                                            clearInterval(statusCheckInterval);
+                                            window.location.reload();
+                                            return;
+                                        } else if (reconnectResult === true) {
+                                            // Successfully reconnected to old server - keep waiting
+                                            console.log('[CircuitHandler] Still connected to old server, waiting for traffic switch...');
+                                        }
+                                    } catch (err) {
+                                        // Circuit error = likely new server
+                                        if (err?.toString().includes('circuit') || err?.toString().includes('expired')) {
+                                            console.log('[CircuitHandler] Circuit error detected, new server is live, reloading...');
+                                            clearInterval(statusCheckInterval);
+                                            window.location.reload();
+                                            return;
+                                        }
+                                    }
+                                }
+                            } catch (healthError) {
+                                console.log('[CircuitHandler] Health check failed (site may be switching), will retry...');
                             }
                         }, config.statusPollInterval);
                     } else {
