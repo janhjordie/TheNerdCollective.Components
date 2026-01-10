@@ -33,7 +33,7 @@
         ...(window.blazorReconnectionConfig || {})
     };
 
-    console.log('[Blazor] Reconnection handler initializing with config:', config);
+    console.log('[CircuitHandler] Reconnection handler initializing with config:', config);
 
     // Status tracking
     let reconnectionStatus = null;
@@ -46,7 +46,7 @@
     // Legacy API - for backward compatibility
     window.configureBlazorReconnection = (options) => {
         config = { ...config, ...options };
-        console.log('[Blazor] Reconnection dialog configured with custom options');
+        console.log('[CircuitHandler] Reconnection dialog configured with custom options');
     };
 
     // Detect if running locally
@@ -67,7 +67,7 @@
         if (isLocalhost()) {
             try {
                 const devUrl = '/reconnection-status.dev.json?t=' + Date.now();
-                console.log('[Blazor] Trying local dev status file:', devUrl);
+                console.log('[CircuitHandler] Trying local dev status file:', devUrl);
                 
                 const devResponse = await fetch(devUrl, {
                     cache: 'no-cache',
@@ -76,11 +76,11 @@
                 
                 if (devResponse.ok) {
                     const status = await devResponse.json();
-                    console.log('[Blazor] ✅ Local dev status loaded:', status);
+                    console.log('[CircuitHandler] ✅ Local dev status loaded:', status);
                     return status;
                 }
             } catch (e) {
-                console.log('[Blazor] No local dev status file, falling back to configured URL');
+                console.log('[CircuitHandler] No local dev status file, falling back to configured URL');
             }
         }
         
@@ -93,11 +93,11 @@
             
             if (response.ok) {
                 const status = await response.json();
-                console.log('[Blazor] Reconnection status loaded:', status);
+                console.log('[CircuitHandler] Reconnection status loaded:', status);
                 return status;
             }
         } catch (e) {
-            console.log('[Blazor] Could not load reconnection status, using defaults');
+            console.log('[CircuitHandler] Could not load reconnection status, using defaults');
         }
         
         return null;
@@ -126,7 +126,7 @@
         const message = config.versionUpdateMessage || 
                        'En ny version er tilgængelig - opdater siden når det passer dig';
         
-        console.log(`[Blazor] New version available: ${initialVersion} → ${newVersion}`);
+        console.log(`[CircuitHandler] New version available: ${initialVersion} → ${newVersion}`);
         
         versionBanner = document.createElement('div');
         versionBanner.id = 'blazor-version-banner';
@@ -155,12 +155,12 @@
         
         // Wire up buttons
         document.getElementById('version-reload-btn').onclick = () => {
-            console.log('[Blazor] User clicked "Opdater nu", reloading...');
+            console.log('[CircuitHandler] User clicked "Opdater nu", reloading...');
             window.location.reload();
         };
         
         document.getElementById('version-dismiss-btn').onclick = () => {
-            console.log('[Blazor] User dismissed version banner');
+            console.log('[CircuitHandler] User dismissed version banner');
             hideVersionBanner();
         };
     }
@@ -178,7 +178,7 @@
         if (!config.checkStatus) return;
         if (versionPollInterval) return; // Already polling
         
-        console.log('[Blazor] Starting version polling every', config.statusPollInterval, 'ms');
+        console.log('[CircuitHandler] Starting version polling every', config.statusPollInterval, 'ms');
         
         versionPollInterval = setInterval(async () => {
             const status = await checkReconnectionStatus();
@@ -187,7 +187,7 @@
             // First time we get a version, store it as initial
             if (!initialVersion) {
                 initialVersion = status.version;
-                console.log('[Blazor] Initial version:', initialVersion);
+                console.log('[CircuitHandler] Initial version:', initialVersion);
                 return;
             }
             
@@ -203,6 +203,45 @@
         if (versionPollInterval) {
             clearInterval(versionPollInterval);
             versionPollInterval = null;
+        }
+    }
+
+    // Connection health monitor
+    let connectionMonitorInterval = null;
+    let lastConnectionCheck = Date.now();
+    
+    function startConnectionMonitor() {
+        if (connectionMonitorInterval) return;
+        
+        console.log('[CircuitHandler] 🩺 Starting connection health monitor (5s interval)');
+        
+        connectionMonitorInterval = setInterval(() => {
+            try {
+                const blazor = window.Blazor;
+                let connectionState = 'Unknown';
+                let connectionId = 'N/A';
+                
+                if (blazor?._internal?.dotNetExports?.INTERNAL?.getConnection) {
+                    const connection = blazor._internal.dotNetExports.INTERNAL.getConnection();
+                    connectionState = connection.connectionState || connection.state || 'Unknown';
+                    connectionId = connection.connectionId || 'N/A';
+                }
+                
+                const uptime = Math.floor((Date.now() - lastConnectionCheck) / 1000);
+                lastConnectionCheck = Date.now();
+                
+                console.log(`[CircuitHandler] 💓 Health Check | State: ${connectionState} | ID: ${connectionId} | Version: ${initialVersion || 'pending'} | Online: ${navigator.onLine}`);
+            } catch (err) {
+                console.warn('[CircuitHandler] ⚠️ Health check error:', err.message);
+            }
+        }, 5000);
+    }
+    
+    function stopConnectionMonitor() {
+        if (connectionMonitorInterval) {
+            clearInterval(connectionMonitorInterval);
+            connectionMonitorInterval = null;
+            console.log('[CircuitHandler] Connection health monitor stopped');
         }
     }
 
@@ -472,7 +511,7 @@
         // Check for circuit expiry - trigger reload
         if (message.includes('circuit state could not be retrieved') ||
             (message.includes('circuit') && message.includes('expired'))) {
-            console.log('[Blazor] Circuit expired detected, reloading in 2 seconds...');
+            console.log('[CircuitHandler] Circuit expired detected, reloading in 2 seconds...');
             
             // Show server restart UI
             if (reconnectModal) {
@@ -505,7 +544,7 @@
                 
                 // Wait before attempting (except first attempt)
                 if (attemptCount > 1) {
-                    console.log(`[Blazor] Waiting ${currentInterval}ms before attempt ${attemptCount}...`);
+                    console.log(`[CircuitHandler] Waiting ${currentInterval}ms before attempt ${attemptCount}...`);
                     await new Promise(resolve => setTimeout(resolve, currentInterval));
                     
                     // Exponential backoff: 1s → 2s → 3s → 5s (max)
@@ -520,15 +559,15 @@
                 // Pause attempts while offline or tab hidden
                 if (isOffline || document.hidden) {
                     const reason = isOffline ? 'offline' : 'tab hidden';
-                    console.log(`[Blazor] Skipping attempt (${reason})`);
+                    console.log(`[CircuitHandler] Skipping attempt (${reason})`);
                     continue;
                 }
 
-                console.log(`[Blazor] Reconnect attempt ${attemptCount}/${showUIAfterAttempts} (${currentInterval}ms interval)`);
+                console.log(`[CircuitHandler] Reconnect attempt ${attemptCount}/${showUIAfterAttempts} (${currentInterval}ms interval)`);
 
                 // Only show UI after 5 attempts (silent reconnection first)
                 if (attemptCount === showUIAfterAttempts) {
-                    console.log('[Blazor] Showing reconnection UI after 5 silent attempts');
+                    console.log('[CircuitHandler] Showing reconnection UI after 5 silent attempts');
                     await showReconnectingUI();
                 }
 
@@ -537,7 +576,7 @@
                     
                     if (result) {
                         // Successfully reconnected
-                        console.log(`[Blazor] Successfully reconnected after ${attemptCount} attempts`);
+                        console.log(`[CircuitHandler] Successfully reconnected after ${attemptCount} attempts`);
                         hideReconnectUI();
                         reconnectionProcess = null;
                         return;
@@ -545,7 +584,7 @@
                     
                     // Server reached but connection rejected - reload (only show UI if past threshold)
                     if (result === false) {
-                        console.log(`[Blazor] Connection rejected after ${attemptCount} attempts, reloading...`);
+                        console.log(`[CircuitHandler] Connection rejected after ${attemptCount} attempts, reloading...`);
                         if (attemptCount >= showUIAfterAttempts) {
                             showServerRestartUI();
                         }
@@ -558,7 +597,7 @@
                     // Circuit expired (server restarted) - reload (only show UI if past threshold)
                     if (errorMsg.includes('circuit state could not be retrieved') ||
                         (errorMsg.includes('circuit') && errorMsg.includes('expired'))) {
-                        console.log(`[Blazor] Circuit expired after ${attemptCount} attempts (server restarted), reloading...`);
+                        console.log(`[CircuitHandler] Circuit expired after ${attemptCount} attempts (server restarted), reloading...`);
                         if (attemptCount >= showUIAfterAttempts) {
                             showServerRestartUI();
                         }
@@ -566,7 +605,7 @@
                         return;
                     }
                     
-                    console.log(`[Blazor] Reconnection attempt ${attemptCount} failed, will retry...`);
+                    console.log(`[CircuitHandler] Reconnection attempt ${attemptCount} failed, will retry...`);
                 }
             }
         })();
@@ -583,7 +622,7 @@
     // Network online/offline awareness to improve reliability
     window.addEventListener('offline', () => {
         isOffline = true;
-        console.log('[Blazor] Browser is offline; pausing reconnection attempts');
+        console.log('[CircuitHandler] Browser is offline; pausing reconnection attempts');
         if (!reconnectModal && !isInitialLoad) {
             // Show lightweight offline notice
             reconnectModal = document.createElement('div');
@@ -600,7 +639,7 @@
     });
     window.addEventListener('online', async () => {
         isOffline = false;
-        console.log('[Blazor] Browser is online; resuming reconnection attempts');
+        console.log('[CircuitHandler] Browser is online; resuming reconnection attempts');
         // Replace offline notice with proper reconnection UI/status
         if (reconnectModal) {
             try {
@@ -616,14 +655,14 @@
 
     // Check if Blazor has already started (handles autostart scenarios)
     if (window.Blazor && typeof window.Blazor._internal !== 'undefined') {
-        console.log('[Blazor] Already started, hooking into existing reconnection system');
+        console.log('[CircuitHandler] Already started, hooking into existing reconnection system');
         
         // Listen for circuit expiry errors and auto-reload
         window.addEventListener('unhandledrejection', (event) => {
             const error = event.reason?.toString() || '';
             if (error.includes('circuit state could not be retrieved') || 
                 error.includes('circuit') && error.includes('expired')) {
-                console.log('[Blazor] Circuit expired, reloading page in 2 seconds...');
+                console.log('[CircuitHandler] Circuit expired, reloading page in 2 seconds...');
                 event.preventDefault();
                 
                 // Show server restart UI briefly before reload
@@ -641,16 +680,16 @@
         const observer = new MutationObserver(async () => {
             const defaultModal = document.getElementById('components-reconnect-modal');
             if (defaultModal && !isInitialLoad) {
-                console.log('[Blazor] Default reconnect modal detected, loading status...');
+                console.log('[CircuitHandler] Default reconnect modal detected, loading status...');
                 
                 // Load reconnection status
                 reconnectionStatus = await checkReconnectionStatus();
                 const deploymentMode = isDeploying(reconnectionStatus);
                 
                 if (deploymentMode) {
-                    console.log('[Blazor] Deployment mode - showing deployment UI');
+                    console.log('[CircuitHandler] Deployment mode - showing deployment UI');
                 } else {
-                    console.log('[Blazor] Normal mode - showing reconnection UI');
+                    console.log('[CircuitHandler] Normal mode - showing reconnection UI');
                 }
                 
                 defaultModal.style.display = 'none';
@@ -674,7 +713,7 @@
                         statusCheckInterval = setInterval(async () => {
                             const status = await checkReconnectionStatus();
                             if (!status) {
-                                console.log('[Blazor] Status file removed, reloading...');
+                                console.log('[CircuitHandler] Status file removed, reloading...');
                                 clearInterval(statusCheckInterval);
                                 window.location.reload();
                                 return;
@@ -682,7 +721,7 @@
                             
                             // Check if version changed or no longer deploying
                             if (status.version !== lastVersion || !isDeploying(status)) {
-                                console.log('[Blazor] Deployment completed, reloading...');
+                                console.log('[CircuitHandler] Deployment completed, reloading...');
                                 clearInterval(statusCheckInterval);
                                 window.location.reload();
                             }
@@ -702,36 +741,36 @@
                         
                         const attemptReconnect = async () => {
                             if (isOffline) {
-                                console.log('[Blazor] Skipping attempt (offline)');
+                                console.log('[CircuitHandler] Skipping attempt (offline)');
                                 scheduleNextAttempt();
                                 return;
                             }
                             if (isPaused) {
-                                console.log('[Blazor] Skipping attempt (tab is not visible)');
+                                console.log('[CircuitHandler] Skipping attempt (tab is not visible)');
                                 scheduleNextAttempt();
                                 return;
                             }
                             
                             attemptCount++;
-                            console.log(`[Blazor] Reconnection attempt ${attemptCount} (interval: ${reconnectInterval}ms)`);
+                            console.log(`[CircuitHandler] Reconnection attempt ${attemptCount} (interval: ${reconnectInterval}ms)`);
                             
                             try {
                                 const result = await Blazor.reconnect();
                                 
                                 if (result) {
-                                    console.log(`[Blazor] Successfully reconnected after ${attemptCount} attempts`);
+                                    console.log(`[CircuitHandler] Successfully reconnected after ${attemptCount} attempts`);
                                     hideReconnectUI();
                                     return;
                                 }
                             } catch (error) {
-                                console.log(`[Blazor] Attempt ${attemptCount} failed:`, error?.toString());
+                                console.log(`[CircuitHandler] Attempt ${attemptCount} failed:`, error?.toString());
                             }
                             
                             // Check if modal still exists
                             if (document.getElementById('components-reconnect-modal')) {
                                 scheduleNextAttempt();
                             } else {
-                                console.log('[Blazor] Connection restored (default modal gone)');
+                                console.log('[CircuitHandler] Connection restored (default modal gone)');
                                 if (reconnectModal) {
                                     reconnectModal.remove();
                                     reconnectModal = null;
@@ -771,14 +810,14 @@
                         // Handle tab visibility (pause/resume reconnection attempts)
                         document.addEventListener('visibilitychange', () => {
                             if (document.hidden) {
-                                console.log('[Blazor] Tab hidden, pausing reconnection attempts');
+                                console.log('[CircuitHandler] Tab hidden, pausing reconnection attempts');
                                 isPaused = true;
                                 if (reconnectTimeout) {
                                     clearTimeout(reconnectTimeout);
                                     reconnectTimeout = null;
                                 }
                             } else {
-                                console.log('[Blazor] Tab visible again, resuming reconnection attempts');
+                                console.log('[CircuitHandler] Tab visible again, resuming reconnection attempts');
                                 isPaused = false;
                                 // Resume immediately
                                 attemptReconnect();
@@ -791,7 +830,7 @@
                 }
             } else if (!defaultModal && reconnectModal) {
                 // Default modal removed = connection restored
-                console.log('[Blazor] Connection restored, hiding custom UI');
+                console.log('[CircuitHandler] Connection restored, hiding custom UI');
                 if (statusCheckInterval) {
                     clearInterval(statusCheckInterval);
                 }
@@ -806,7 +845,7 @@
         // Mark initial load complete after brief delay
         setTimeout(() => {
             isInitialLoad = false;
-            console.log('[Blazor] Custom reconnection handler active (monitoring mode)');
+            console.log('[CircuitHandler] Custom reconnection handler active (monitoring mode)');
         }, 1000);
         
         return;
@@ -818,12 +857,12 @@
             reconnectionHandler: {
                 onConnectionDown: (options, error) => {
                     if (isInitialLoad) return;
-                    console.log('[Blazor] Connection down, starting infinite reconnection');
+                    console.log('[CircuitHandler] Connection down, starting infinite reconnection');
                     startReconnectionProcess();
                 },
                 onConnectionUp: () => {
                     if (isInitialLoad) return;
-                    console.log('[Blazor] Connection restored');
+                    console.log('[CircuitHandler] Connection restored');
                     
                     if (reconnectionProcess && reconnectionProcess.cancel) {
                         reconnectionProcess.cancel();
@@ -837,10 +876,13 @@
         // Mark initial load complete after 1 second
         setTimeout(() => {
             isInitialLoad = false;
-            console.log('[Blazor] Initial connection established, infinite reconnection handler active');
+            console.log('[CircuitHandler] Initial connection established, infinite reconnection handler active');
             
             // Start version polling after connection is stable
             startVersionPolling();
+            
+            // Start connection health monitoring (for testing/debugging)
+            startConnectionMonitor();
         }, 1000);
     });
 
@@ -853,7 +895,7 @@
         // Circuit expired (server restarted) - suppress and let reconnection handler deal with it
         if (error.includes('circuit state could not be retrieved') ||
             (error.includes('circuit') && error.includes('expired'))) {
-            console.log('[Blazor] Circuit expired error detected (suppressed, handled by reconnection process)');
+            console.log('[CircuitHandler] Circuit expired error detected (suppressed, handled by reconnection process)');
             event.preventDefault();
             return;
         }
@@ -863,7 +905,7 @@
             error.includes('connection being closed') ||
             error.includes('Connection disconnected') ||
             error.includes('Invocation canceled')) {
-            console.log('[Blazor] Suppressed expected circuit error during reconnection');
+            console.log('[CircuitHandler] Suppressed expected circuit error during reconnection');
             event.preventDefault();
         }
     });
@@ -958,8 +1000,26 @@
         hideVersionBanner: () => {
             console.log('[Blazor Test] 🙈 Hiding version banner');
             hideVersionBanner();
+        },
+
+        /**
+         * Stop connection health monitor
+         * Usage: BlazorReconnectionTest.stopMonitor()
+         */
+        stopMonitor: () => {
+            console.log('[Blazor Test] 🛑 Stopping connection health monitor');
+            stopConnectionMonitor();
+        },
+
+        /**
+         * Start connection health monitor
+         * Usage: BlazorReconnectionTest.startMonitor()
+         */
+        startMonitor: () => {
+            console.log('[Blazor Test] ▶️  Starting connection health monitor');
+            startConnectionMonitor();
         }
     };
 
-    console.log('[Blazor] 🧪 Testing API available: BlazorReconnectionTest.disconnect(), .goOffline(), .goOnline(), .status(), .refreshStatus(), .simulateVersionChange(), .hideVersionBanner()');
+    console.log('[CircuitHandler] 🧪 Testing API available: BlazorReconnectionTest.disconnect(), .goOffline(), .goOnline(), .status(), .refreshStatus(), .simulateVersionChange(), .hideVersionBanner(), .stopMonitor(), .startMonitor()');
 })();
