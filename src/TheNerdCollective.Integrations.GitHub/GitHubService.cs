@@ -89,7 +89,7 @@ public class GitHubService
         string? conclusion = null,
         string? actor = null,
         string? branch = null,
-        string? event = null,
+        string? @event = null,
         string? sort = "created",
         string? direction = "desc")
     {
