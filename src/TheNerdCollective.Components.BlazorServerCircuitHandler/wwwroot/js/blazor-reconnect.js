@@ -39,6 +39,9 @@
     let reconnectionStatus = null;
     let statusCheckInterval = null;
     let lastVersion = null;
+    let initialVersion = null; // Track version on page load
+    let versionBanner = null; // New version available banner
+    let versionPollInterval = null; // Background version checking
 
     // Legacy API - for backward compatibility
     window.configureBlazorReconnection = (options) => {
@@ -114,6 +117,93 @@
     // Check if status indicates deployment
     function isDeploying(status) {
         return status && (status.status === 'deploying' || status.deploymentMessage);
+    }
+
+    // Show new version available banner
+    function showVersionBanner(newVersion) {
+        if (versionBanner) return; // Already showing
+        
+        const message = config.versionUpdateMessage || 
+                       'En ny version er tilgængelig - opdater siden når det passer dig';
+        
+        console.log(`[Blazor] New version available: ${initialVersion} → ${newVersion}`);
+        
+        versionBanner = document.createElement('div');
+        versionBanner.id = 'blazor-version-banner';
+        versionBanner.innerHTML = `
+            <div style='position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+                        background: ${config.primaryColor}; color: white; 
+                        padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        z-index: 9998; display: flex; align-items: center; gap: 1rem; max-width: 90%;'>
+                <span style='flex: 1; font-size: 0.95rem;'>${message}</span>
+                <button id='version-reload-btn' 
+                        style='background: white; color: ${config.primaryColor}; border: none; 
+                               padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; 
+                               font-weight: 600; font-size: 0.9rem; white-space: nowrap;'>
+                    Opdater nu
+                </button>
+                <button id='version-dismiss-btn' 
+                        style='background: transparent; color: white; border: 1px solid white; 
+                               padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; 
+                               font-size: 0.9rem; white-space: nowrap;'>
+                    Senere
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(versionBanner);
+        
+        // Wire up buttons
+        document.getElementById('version-reload-btn').onclick = () => {
+            console.log('[Blazor] User clicked "Opdater nu", reloading...');
+            window.location.reload();
+        };
+        
+        document.getElementById('version-dismiss-btn').onclick = () => {
+            console.log('[Blazor] User dismissed version banner');
+            hideVersionBanner();
+        };
+    }
+
+    // Hide version banner
+    function hideVersionBanner() {
+        if (versionBanner) {
+            versionBanner.remove();
+            versionBanner = null;
+        }
+    }
+
+    // Start background version polling
+    function startVersionPolling() {
+        if (!config.checkStatus) return;
+        if (versionPollInterval) return; // Already polling
+        
+        console.log('[Blazor] Starting version polling every', config.statusPollInterval, 'ms');
+        
+        versionPollInterval = setInterval(async () => {
+            const status = await checkReconnectionStatus();
+            if (!status || !status.version) return;
+            
+            // First time we get a version, store it as initial
+            if (!initialVersion) {
+                initialVersion = status.version;
+                console.log('[Blazor] Initial version:', initialVersion);
+                return;
+            }
+            
+            // Check if version changed
+            if (status.version !== initialVersion && !versionBanner) {
+                showVersionBanner(status.version);
+            }
+        }, config.statusPollInterval);
+    }
+
+    // Stop version polling
+    function stopVersionPolling() {
+        if (versionPollInterval) {
+            clearInterval(versionPollInterval);
+            versionPollInterval = null;
+        }
     }
 
     // Generate deployment/reconnection HTML with status
@@ -748,6 +838,9 @@
         setTimeout(() => {
             isInitialLoad = false;
             console.log('[Blazor] Initial connection established, infinite reconnection handler active');
+            
+            // Start version polling after connection is stable
+            startVersionPolling();
         }, 1000);
     });
 
@@ -828,6 +921,8 @@
                 reconnectionStatus: reconnectionStatus,
                 config: config,
                 lastVersion: lastVersion,
+                initialVersion: initialVersion,
+                versionBannerVisible: !!versionBanner,
                 modalVisible: reconnectModal?.style?.display !== 'none'
             });
         },
@@ -841,8 +936,30 @@
             const status = await checkReconnectionStatus();
             console.log('[Blazor Test] ✅ Status refreshed:', status);
             return status;
+        },
+
+        /**
+         * Simulate a version change to test the update banner
+         * Usage: BlazorReconnectionTest.simulateVersionChange('1.0.999')
+         */
+        simulateVersionChange: (newVersion) => {
+            console.log(`[Blazor Test] 🎭 Simulating version change: ${initialVersion} → ${newVersion}`);
+            if (!initialVersion) {
+                console.warn('[Blazor Test] ⚠️ Initial version not set yet. Wait a moment after page load.');
+                return;
+            }
+            showVersionBanner(newVersion);
+        },
+
+        /**
+         * Hide the version update banner
+         * Usage: BlazorReconnectionTest.hideVersionBanner()
+         */
+        hideVersionBanner: () => {
+            console.log('[Blazor Test] 🙈 Hiding version banner');
+            hideVersionBanner();
         }
     };
 
-    console.log('[Blazor] 🧪 Testing API available: BlazorReconnectionTest.disconnect(), .goOffline(), .goOnline(), .status(), .refreshStatus()');
+    console.log('[Blazor] 🧪 Testing API available: BlazorReconnectionTest.disconnect(), .goOffline(), .goOnline(), .status(), .refreshStatus(), .simulateVersionChange(), .hideVersionBanner()');
 })();
