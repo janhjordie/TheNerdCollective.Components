@@ -774,4 +774,75 @@
             event.preventDefault();
         }
     });
+
+    // 🧪 TESTING API - Expose methods for manual testing in browser console
+    window.BlazorReconnectionTest = {
+        /**
+         * Force disconnect the Blazor circuit to test reconnection UI
+         * Usage: BlazorReconnectionTest.disconnect()
+         */
+        disconnect: () => {
+            console.log('[Blazor Test] 🔌 Forcing circuit disconnect...');
+            try {
+                // Access the internal Blazor connection and stop it
+                const blazor = window.Blazor;
+                if (blazor?._internal?.dotNetExports?.INTERNAL?.getConnection) {
+                    const connection = blazor._internal.dotNetExports.INTERNAL.getConnection();
+                    connection.stop();
+                    console.log('[Blazor Test] ✅ Circuit disconnected. Reconnection UI should appear.');
+                } else {
+                    console.error('[Blazor Test] ❌ Could not access Blazor connection. Make sure Blazor is started.');
+                }
+            } catch (err) {
+                console.error('[Blazor Test] ❌ Error disconnecting:', err);
+            }
+        },
+
+        /**
+         * Simulate network going offline
+         * Usage: BlazorReconnectionTest.goOffline()
+         */
+        goOffline: () => {
+            console.log('[Blazor Test] 📡 Simulating offline mode...');
+            window.dispatchEvent(new Event('offline'));
+            console.log('[Blazor Test] ✅ Offline event dispatched. UI should reflect offline state.');
+        },
+
+        /**
+         * Simulate network coming back online
+         * Usage: BlazorReconnectionTest.goOnline()
+         */
+        goOnline: () => {
+            console.log('[Blazor Test] 📡 Simulating online mode...');
+            window.dispatchEvent(new Event('online'));
+            console.log('[Blazor Test] ✅ Online event dispatched. Reconnection should attempt.');
+        },
+
+        /**
+         * Show current reconnection status and configuration
+         * Usage: BlazorReconnectionTest.status()
+         */
+        status: () => {
+            console.log('[Blazor Test] 📊 Current Status:', {
+                isOnline: navigator.onLine,
+                reconnectionStatus: reconnectionStatus,
+                config: config,
+                lastVersion: lastVersion,
+                modalVisible: reconnectModal?.style?.display !== 'none'
+            });
+        },
+
+        /**
+         * Force refresh the status from server
+         * Usage: BlazorReconnectionTest.refreshStatus()
+         */
+        refreshStatus: async () => {
+            console.log('[Blazor Test] 🔄 Refreshing reconnection status from server...');
+            const status = await checkReconnectionStatus();
+            console.log('[Blazor Test] ✅ Status refreshed:', status);
+            return status;
+        }
+    };
+
+    console.log('[Blazor] 🧪 Testing API available: BlazorReconnectionTest.disconnect(), .goOffline(), .goOnline(), .status(), .refreshStatus()');
 })();

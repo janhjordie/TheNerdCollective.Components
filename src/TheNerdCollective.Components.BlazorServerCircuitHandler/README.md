@@ -573,6 +573,84 @@ builder.Services.Configure<CircuitOptions>(options =>
 });
 ```
 
+## Testing & Development
+
+The reconnection handler exposes a testing API in the browser console for manual testing and debugging.
+
+### Testing API
+
+After the handler loads, you'll see:
+```
+[Blazor] 🧪 Testing API available: BlazorReconnectionTest.disconnect(), .goOffline(), .goOnline(), .status(), .refreshStatus()
+```
+
+### Available Test Methods
+
+Open browser DevTools console and use:
+
+```javascript
+// Force disconnect the Blazor circuit (shows reconnection UI)
+BlazorReconnectionTest.disconnect()
+
+// Simulate network going offline
+BlazorReconnectionTest.goOffline()
+
+// Simulate network coming back online
+BlazorReconnectionTest.goOnline()
+
+// View current reconnection status and configuration
+BlazorReconnectionTest.status()
+
+// Force refresh the deployment status from server
+await BlazorReconnectionTest.refreshStatus()
+```
+
+### Testing Scenarios
+
+**Test Brief Reconnection (Silent)**
+```javascript
+// Disconnect briefly - should reconnect without showing UI
+BlazorReconnectionTest.disconnect()
+// Wait a few seconds, circuit reconnects silently
+```
+
+**Test Extended Reconnection (UI Appears)**
+```javascript
+// Keep disconnecting to trigger UI after 5 attempts
+for (let i = 0; i < 6; i++) {
+  BlazorReconnectionTest.disconnect()
+}
+// Reconnection overlay appears with countdown
+```
+
+**Test Offline Detection**
+```javascript
+// Simulate offline
+BlazorReconnectionTest.goOffline()
+// See "No network connection" message
+
+// Come back online
+BlazorReconnectionTest.goOnline()
+// Reconnection attempts resume
+```
+
+**Test Deployment Status**
+```javascript
+// Check current deployment status
+await BlazorReconnectionTest.refreshStatus()
+
+// View what the handler sees
+BlazorReconnectionTest.status()
+```
+
+### Browser Network Throttling (Alternative)
+
+You can also test using browser DevTools:
+1. Open DevTools → **Network** tab
+2. Change throttling to **Offline**
+3. Wait 2-3 seconds → reconnection UI appears
+4. Change back to **No throttling** → reconnects
+
 ## Dependencies
 
 - **MudBlazor** 8.15+ (optional, but recommended)
