@@ -1,16 +1,15 @@
 /**
- * Blazor Server Deployment Status & Reconnection UI Handler
+ * Blazor Server Reconnection Handler
  * 
- * A simple, non-invasive overlay that:
- * - Polls a status endpoint for deployment info
- * - Shows deployment overlay during deployments
- * - Shows version update banner when new version is available
- * - Enhances Blazor's default reconnect modal (without interfering with Blazor startup)
+ * Minimal, non-invasive circuit handler that:
+ * - Shows reconnect modal ONLY when Blazor circuit is lost (user loses connection)
+ * - Uses health check to verify server is responsive when reconnecting
+ * - Does NOT show deployment overlays (rely on status endpoint UI in app)
+ * - Silently polls status for version change detection
  * 
  * Works with MudBlazor 8.15+ and .NET 10
  * 
  * Setup: Just load this script after blazor.web.js (no autostart=false needed!)
- * Customization: Set window.blazorReconnectionConfig before loading this script
  */
 
 (() => {
@@ -46,10 +45,8 @@
     let initialCommit = null;      // Commit SHA when page loaded (primary identifier)
     let initialVersion = null;     // Human-readable version when page loaded
     let currentPollInterval = config.normalPollInterval;
-    let isDeploymentMode = false;
     let versionPollTimeout = null;
     let versionBanner = null;
-    let deploymentOverlay = null;
     let reconnectModal = null;
     let lastKnownStatus = null;
     let isInitialLoad = true;
@@ -258,31 +255,12 @@
         }
     }
 
-    // ===== DEPLOYMENT OVERLAY =====
+    // ===== DEPLOYMENT OVERLAY (DISABLED) =====
+    // Deployment feedback is handled by app's status banner
+    // We do not show overlays during deployment, only on actual circuit loss
     
-    function showDeploymentOverlay(status) {
-        if (deploymentOverlay) return;
-        
-        console.log('[CircuitHandler] 🚀 Showing deployment overlay');
-        
-        deploymentOverlay = document.createElement('div');
-        deploymentOverlay.id = 'blazor-deployment-overlay';
-        deploymentOverlay.innerHTML = getDeploymentHtml(status);
-        
-        if (config.customCss) {
-            const style = document.createElement('style');
-            style.textContent = config.customCss;
-            deploymentOverlay.appendChild(style);
-        }
-        
-        document.body.appendChild(deploymentOverlay);
-    }
-
     function hideDeploymentOverlay() {
-        if (deploymentOverlay) {
-            deploymentOverlay.remove();
-            deploymentOverlay = null;
-        }
+        // No-op: deployment overlays are not shown
     }
 
     // ===== RECONNECT MODAL (enhances Blazor's default) =====
@@ -317,24 +295,8 @@
     }
 
     // ===== STATUS POLLING =====
+    // Silently polls for version changes; does not show deployment overlays
     
-    function adjustPollingInterval(status) {
-        const wasDeploymentMode = isDeploymentMode;
-        isDeploymentMode = isDeploying(status);
-        
-        const targetInterval = isDeploymentMode ? config.statusPollInterval : config.normalPollInterval;
-        
-        if (targetInterval !== currentPollInterval) {
-            currentPollInterval = targetInterval;
-            
-            if (isDeploymentMode && !wasDeploymentMode) {
-                console.log('[CircuitHandler] 🚀 Deployment detected! Fast polling (every', currentPollInterval / 1000, 's)');
-            } else if (!isDeploymentMode && wasDeploymentMode) {
-                console.log('[CircuitHandler] ✅ Deployment complete. Normal polling (every', currentPollInterval / 1000, 's)');
-            }
-        }
-    }
-
     async function pollStatus() {
         const status = await fetchStatus();
         
@@ -349,12 +311,8 @@
                 console.log('[CircuitHandler] Initial version:', initialVersion);
             }
             
-            // Handle deployment mode
-            if (isDeploying(status)) {
-                showDeploymentOverlay(status);
-            } else {
-                hideDeploymentOverlay();
-                
+            // Only check for version change; deployment overlay is disabled
+            if (!isDeploying(status)) {
                 // Check for version change (only after deployment completes)
                 const commitChanged = status.commit && initialCommit && status.commit !== initialCommit;
                 if (commitChanged && !versionBanner) {
@@ -362,9 +320,6 @@
                     showVersionBanner(displayVersion);
                 }
             }
-            
-            // Adjust polling speed
-            adjustPollingInterval(status);
         }
         
         // Schedule next poll
@@ -422,14 +377,14 @@
                 } finally {
                     isModifyingDom = false;
                 }
-            } else if (!defaultModal && (reconnectModal || deploymentOverlay)) {
+            } else if (!defaultModal && reconnectModal) {
                 // Default modal removed = connection restored
-                console.log('[CircuitHandler] Connection restored, hiding overlays');
+                // Health check has confirmed server is up, safe to hide
+                console.log('[CircuitHandler] Connection restored, hiding reconnect modal');
                 
                 isModifyingDom = true;
                 try {
                     hideReconnectModal();
-                    hideDeploymentOverlay();
                 } finally {
                     isModifyingDom = false;
                 }
