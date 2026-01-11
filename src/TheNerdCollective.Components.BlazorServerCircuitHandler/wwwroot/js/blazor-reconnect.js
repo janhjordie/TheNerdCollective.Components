@@ -25,7 +25,8 @@
         deploymentHtml: null,
         statusUrl: '/reconnection-status.json',
         checkStatus: true,
-        statusPollInterval: 5000,
+        statusPollInterval: 5000,        // Fast polling during deployment (5 seconds)
+        normalPollInterval: 60000,       // Slow polling during normal operation (60 seconds)
         customCss: null,
         spinnerUrl: null,
         primaryColor: '#594AE2',
@@ -42,6 +43,8 @@
     let initialVersion = null; // Track version on page load
     let versionBanner = null; // New version available banner
     let versionPollInterval = null; // Background version checking
+    let currentPollInterval = null; // Track current polling interval
+    let isDeploymentMode = false; // Track if we're in deployment mode
 
     // Legacy API - for backward compatibility
     window.configureBlazorReconnection = (options) => {
@@ -173,50 +176,97 @@
         }
     }
 
-    // Start background version polling
+    // Start background version polling with adaptive intervals
+    // Normal mode: poll every 60s, Deploying mode: poll every 5s
     function startVersionPolling() {
         if (!config.checkStatus) return;
         if (versionPollInterval) return; // Already polling
         
-        console.log('[CircuitHandler] Starting version polling every', config.statusPollInterval, 'ms');
+        // Start with normal interval, will switch to fast if deploying
+        currentPollInterval = config.normalPollInterval;
+        console.log('[CircuitHandler] Starting version polling (normal mode: every', currentPollInterval / 1000, 's)');
         
         // Fetch initial version immediately (don't wait for polling interval)
         (async () => {
             try {
                 const status = await checkReconnectionStatus();
-                if (status && status.version && !initialVersion) {
-                    initialVersion = status.version;
-                    console.log('[CircuitHandler] Initial version:', initialVersion);
+                if (status) {
+                    if (status.version && !initialVersion) {
+                        initialVersion = status.version;
+                        console.log('[CircuitHandler] Initial version:', initialVersion);
+                    }
+                    // Check if deployment is in progress and adjust polling
+                    adjustPollingInterval(status);
                 }
             } catch (e) {
                 console.log('[CircuitHandler] Could not fetch initial version:', e.message);
             }
         })();
         
-        versionPollInterval = setInterval(async () => {
+        scheduleNextPoll();
+    }
+    
+    // Schedule the next poll based on current interval
+    function scheduleNextPoll() {
+        if (versionPollInterval) {
+            clearTimeout(versionPollInterval);
+        }
+        
+        versionPollInterval = setTimeout(async () => {
             const status = await checkReconnectionStatus();
-            if (!status || !status.version) return;
-            
-            // First time we get a version, store it as initial
-            if (!initialVersion) {
-                initialVersion = status.version;
-                console.log('[CircuitHandler] Initial version:', initialVersion);
-                return;
+            if (status) {
+                // First time we get a version, store it as initial
+                if (status.version && !initialVersion) {
+                    initialVersion = status.version;
+                    console.log('[CircuitHandler] Initial version:', initialVersion);
+                }
+                
+                // Check if version changed
+                if (status.version && status.version !== initialVersion && !versionBanner) {
+                    showVersionBanner(status.version);
+                }
+                
+                // Adjust polling interval based on deployment status
+                adjustPollingInterval(status);
             }
             
-            // Check if version changed
-            if (status.version !== initialVersion && !versionBanner) {
-                showVersionBanner(status.version);
+            // Schedule next poll
+            scheduleNextPoll();
+        }, currentPollInterval);
+    }
+    
+    // Adjust polling interval based on deployment status
+    function adjustPollingInterval(status) {
+        const wasDeploymentMode = isDeploymentMode;
+        isDeploymentMode = status && status.status === 'deploying';
+        
+        const targetInterval = isDeploymentMode ? config.statusPollInterval : config.normalPollInterval;
+        
+        if (targetInterval !== currentPollInterval) {
+            currentPollInterval = targetInterval;
+            
+            if (isDeploymentMode && !wasDeploymentMode) {
+                console.log('[CircuitHandler] 🚀 Deployment detected! Switching to fast polling (every', currentPollInterval / 1000, 's)');
+            } else if (!isDeploymentMode && wasDeploymentMode) {
+                console.log('[CircuitHandler] ✅ Deployment complete. Switching to normal polling (every', currentPollInterval / 1000, 's)');
             }
-        }, config.statusPollInterval);
+            
+            // Reschedule with new interval
+            if (versionPollInterval) {
+                clearTimeout(versionPollInterval);
+                scheduleNextPoll();
+            }
+        }
     }
 
     // Stop version polling
     function stopVersionPolling() {
         if (versionPollInterval) {
-            clearInterval(versionPollInterval);
+            clearTimeout(versionPollInterval);
             versionPollInterval = null;
         }
+        currentPollInterval = null;
+        isDeploymentMode = false;
     }
 
     // Connection health monitor
@@ -760,12 +810,14 @@
             console.log('[Blazor Test] ✅ Online event dispatched. Reconnection should attempt.');
         },
         status: () => {
+            const pollingMode = isDeploymentMode ? 'deploying (fast)' : 'normal (slow)';
+            const intervalSecs = currentPollInterval ? (currentPollInterval / 1000) + 's' : 'stopped';
             console.log('[Blazor Test] 📊 Current Status:', {
                 isOnline: navigator.onLine,
                 reconnectionStatus: reconnectionStatus,
-                config: config,
-                lastVersion: lastVersion,
                 initialVersion: initialVersion,
+                pollingMode: pollingMode,
+                pollInterval: intervalSecs,
                 versionBannerVisible: !!versionBanner,
                 modalVisible: reconnectModal?.style?.display !== 'none'
             });
