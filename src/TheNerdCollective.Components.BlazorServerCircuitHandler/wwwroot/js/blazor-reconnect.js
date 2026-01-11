@@ -98,6 +98,7 @@
             if (response.ok) {
                 const status = await response.json();
                 console.log('[CircuitHandler] Reconnection status loaded:', status);
+                lastKnownStatus = status; // Track for health monitor display
                 return status;
             }
         } catch (e) {
@@ -305,6 +306,7 @@
     let connectionMonitorInterval = null;
     let lastConnectionCheck = Date.now();
     let healthCheckCount = 0;
+    let lastKnownStatus = null; // Track last status for health log display
     
     function startConnectionMonitor() {
         if (connectionMonitorInterval) return;
@@ -317,7 +319,18 @@
             try {
                 healthCheckCount++;
                 const uptime = Math.floor((Date.now() - lastConnectionCheck) / 1000);
-                const mode = isDeploymentMode ? '🚀 Deploying' : '✅ Normal';
+                // Show actual phase from lastKnownStatus instead of just "Deploying"
+                let mode = '✅ Normal';
+                if (lastKnownStatus && lastKnownStatus.status) {
+                    switch (lastKnownStatus.status) {
+                        case 'preparing': mode = '🔧 Preparing'; break;
+                        case 'deploying': mode = '🚀 Deploying'; break;
+                        case 'verifying': mode = '🔍 Verifying'; break;
+                        case 'switching': mode = '🔄 Switching'; break;
+                        case 'maintenance': mode = '🛠️ Maintenance'; break;
+                        default: mode = '✅ Normal';
+                    }
+                }
                 const pollRate = currentPollInterval ? `${currentPollInterval / 1000}s` : 'stopped';
                 
                 console.log(`[CircuitHandler] 💓 Health #${healthCheckCount} | Mode: ${mode} | Poll: ${pollRate} | Version: ${initialVersion || 'pending'} | Online: ${navigator.onLine}`);
