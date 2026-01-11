@@ -1139,40 +1139,67 @@
         return;
     }
 
-    // Start Blazor with custom reconnection handler
-    Blazor.start({
-        circuit: {
-            reconnectionHandler: {
-                onConnectionDown: (options, error) => {
-                    if (isInitialLoad) return;
-                    console.log('[CircuitHandler] Connection down, starting infinite reconnection');
-                    startReconnectionProcess();
-                },
-                onConnectionUp: () => {
-                    if (isInitialLoad) return;
-                    console.log('[CircuitHandler] Connection restored');
-                    
-                    if (reconnectionProcess && reconnectionProcess.cancel) {
-                        reconnectionProcess.cancel();
+    // Wait for Blazor object to be available, then start with custom reconnection handler
+    const startBlazorWithHandler = () => {
+        console.log('[CircuitHandler] Starting Blazor with custom reconnection handler...');
+        Blazor.start({
+            circuit: {
+                reconnectionHandler: {
+                    onConnectionDown: (options, error) => {
+                        if (isInitialLoad) return;
+                        console.log('[CircuitHandler] Connection down, starting infinite reconnection');
+                        startReconnectionProcess();
+                    },
+                    onConnectionUp: () => {
+                        if (isInitialLoad) return;
+                        console.log('[CircuitHandler] Connection restored');
+                        
+                        if (reconnectionProcess && reconnectionProcess.cancel) {
+                            reconnectionProcess.cancel();
+                        }
+                        
+                        hideReconnectUI();
                     }
-                    
-                    hideReconnectUI();
                 }
             }
-        }
-    }).then(() => {
-        // Mark initial load complete after 1 second
+        }).then(() => {
+            // Mark initial load complete after 1 second
+            setTimeout(() => {
+                isInitialLoad = false;
+                console.log('[CircuitHandler] Initial connection established, infinite reconnection handler active');
+                
+                // Start version polling after connection is stable
+                startVersionPolling();
+                
+                // Start connection health monitoring (for testing/debugging)
+                startConnectionMonitor();
+            }, 1000);
+        });
+    };
+
+    // Check if Blazor is available now or wait for it
+    if (typeof window.Blazor !== 'undefined' && typeof window.Blazor.start === 'function') {
+        console.log('[CircuitHandler] Blazor object available, starting immediately');
+        startBlazorWithHandler();
+    } else {
+        console.log('[CircuitHandler] Waiting for Blazor object to be available...');
+        // Poll for Blazor object (blazor.web.js might still be loading)
+        const waitForBlazor = setInterval(() => {
+            if (typeof window.Blazor !== 'undefined' && typeof window.Blazor.start === 'function') {
+                clearInterval(waitForBlazor);
+                console.log('[CircuitHandler] Blazor object now available, starting');
+                startBlazorWithHandler();
+            }
+        }, 50);
+        
+        // Safety timeout - if Blazor doesn't appear in 10 seconds, something is wrong
         setTimeout(() => {
-            isInitialLoad = false;
-            console.log('[CircuitHandler] Initial connection established, infinite reconnection handler active');
-            
-            // Start version polling after connection is stable
-            startVersionPolling();
-            
-            // Start connection health monitoring (for testing/debugging)
-            startConnectionMonitor();
-        }, 1000);
-    });
+            clearInterval(waitForBlazor);
+            if (typeof window.Blazor === 'undefined') {
+                console.error('[CircuitHandler] Blazor object never became available - check that blazor.web.js is loaded');
+            }
+        }, 10000);
+    }
 
     // Handle unhandled promise rejections for circuit errors
     window.addEventListener('unhandledrejection', (event) => {
