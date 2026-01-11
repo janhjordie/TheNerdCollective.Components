@@ -117,9 +117,25 @@
         return status.reconnectingMessage || null;
     }
 
-    // Check if status indicates deployment
+    // Check if status indicates deployment in progress (any non-normal status)
+    // Phases: preparing, deploying, verifying, switching, maintenance
     function isDeploying(status) {
-        return status && (status.status === 'deploying' || status.deploymentMessage);
+        if (!status) return false;
+        const deploymentPhases = ['preparing', 'deploying', 'verifying', 'switching', 'maintenance'];
+        return deploymentPhases.includes(status.status) || status.deploymentMessage;
+    }
+    
+    // Get human-readable phase name for UI display
+    function getPhaseLabel(status) {
+        if (!status) return '';
+        switch (status.status) {
+            case 'preparing': return '🔧 Forbereder';
+            case 'deploying': return '🚀 Deployer';
+            case 'verifying': return '🔍 Verificerer';
+            case 'switching': return '🔄 Skifter';
+            case 'maintenance': return '🛠️ Vedligeholdelse';
+            default: return '';
+        }
     }
 
     // Show new version available banner
@@ -357,7 +373,8 @@
                         stroke-dasharray="31.4" stroke-dashoffset="10" stroke-linecap="round"/>
                </svg>`;
         
-        const title = isDeploymentMode ? '🚀 Deploying Updates' : 'Connection Lost';
+        const phaseLabel = isDeploymentMode ? getPhaseLabel(status) : '';
+        const title = isDeploymentMode ? (phaseLabel || '🚀 Deploying Updates') : 'Connection Lost';
         const subtitle = isDeploymentMode 
             ? 'The page will reload automatically when complete.'
             : `Next attempt in <span id='countdown-seconds'>1</span>s`;
