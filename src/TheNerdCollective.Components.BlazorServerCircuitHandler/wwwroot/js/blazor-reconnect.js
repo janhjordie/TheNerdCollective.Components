@@ -1035,6 +1035,12 @@
         setTimeout(() => {
             isInitialLoad = false;
             console.log('[CircuitHandler] Custom reconnection handler active (monitoring mode)');
+            
+            // Start version polling after connection is stable (same as normal path)
+            startVersionPolling();
+            
+            // Start connection health monitoring (for testing/debugging)
+            startConnectionMonitor();
         }, 1000);
         
         return;
