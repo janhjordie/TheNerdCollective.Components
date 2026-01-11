@@ -1,133 +1,110 @@
 /**
- * Blazor Server Reconnection Handler
- * Infinite reconnection with exponential backoff (1s → 3s → 5s max)
- * Only shows UI after 5 failed attempts for better UX during quick reconnects
- * Follows official Microsoft guidance from:
- * https://learn.microsoft.com/en-us/aspnet/core/blazor/fundamentals/signalr
+ * Blazor Server Deployment Status & Reconnection UI Handler
+ * 
+ * A simple, non-invasive overlay that:
+ * - Polls a status endpoint for deployment info
+ * - Shows deployment overlay during deployments
+ * - Shows version update banner when new version is available
+ * - Enhances Blazor's default reconnect modal (without interfering with Blazor startup)
+ * 
  * Works with MudBlazor 8.15+ and .NET 10
  * 
- * Customization: Call window.configureBlazorReconnection(options) before Blazor.start()
+ * Setup: Just load this script after blazor.web.js (no autostart=false needed!)
+ * Customization: Set window.blazorReconnectionConfig before loading this script
  */
 
 (() => {
-    const initialInterval = 1000;  // Start at 1 second
-    const maxInterval = 5000;      // Max 5 seconds between attempts
-    const showUIAfterAttempts = 5; // Only show UI after 5 silent attempts
-    let isInitialLoad = true;
-    let reconnectModal = null;
-    let currentInterval = initialInterval;
-    let isOffline = !navigator.onLine;
+    'use strict';
     
-    // Read configuration from window.blazorReconnectionConfig (set before script loads)
-    let config = {
+    // ===== CONFIGURATION =====
+    const config = {
+        // Status endpoint
+        statusUrl: '/reconnection-status.json',
+        checkStatus: true,
+        
+        // Polling intervals
+        statusPollInterval: 5000,        // Fast polling during deployment (5 seconds)
+        normalPollInterval: 60000,       // Slow polling during normal operation (60 seconds)
+        
+        // UI customization
+        primaryColor: '#594AE2',
+        successColor: '#4CAF50',
+        spinnerUrl: null,
+        customCss: null,
         reconnectingHtml: null,
         serverRestartHtml: null,
         deploymentHtml: null,
-        statusUrl: '/reconnection-status.json',
-        checkStatus: true,
-        statusPollInterval: 5000,        // Fast polling during deployment (5 seconds)
-        normalPollInterval: 60000,       // Slow polling during normal operation (60 seconds)
-        customCss: null,
-        spinnerUrl: null,
-        primaryColor: '#594AE2',
-        successColor: '#4CAF50',
+        versionUpdateMessage: null,
+        
+        // Override with user config
         ...(window.blazorReconnectionConfig || {})
     };
 
-    console.log('[CircuitHandler] Reconnection handler initializing with config:', config);
+    console.log('[CircuitHandler] Status overlay initializing with config:', config);
 
-    // Status tracking
-    let reconnectionStatus = null;
-    let statusCheckInterval = null;
-    let lastVersion = null;
-    let initialCommit = null; // Track commit SHA on page load (primary identifier)
-    let initialVersion = null; // Track human-readable version on page load
-    let versionBanner = null; // New version available banner
-    let versionPollInterval = null; // Background version checking
-    let currentPollInterval = null; // Track current polling interval
-    let isDeploymentMode = false; // Track if we're in deployment mode
+    // ===== STATE =====
+    let initialCommit = null;      // Commit SHA when page loaded (primary identifier)
+    let initialVersion = null;     // Human-readable version when page loaded
+    let currentPollInterval = config.normalPollInterval;
+    let isDeploymentMode = false;
+    let versionPollTimeout = null;
+    let versionBanner = null;
+    let deploymentOverlay = null;
+    let reconnectModal = null;
+    let lastKnownStatus = null;
+    let isInitialLoad = true;
 
-    // Legacy API - for backward compatibility
-    window.configureBlazorReconnection = (options) => {
-        config = { ...config, ...options };
-        console.log('[CircuitHandler] Reconnection dialog configured with custom options');
-    };
-
-    // Detect if running locally
+    // ===== UTILITY FUNCTIONS =====
+    
     function isLocalhost() {
         const hostname = window.location.hostname;
         return hostname === 'localhost' || 
                hostname === '127.0.0.1' || 
                hostname === '[::1]' || 
-               hostname.match(/^192\.168\.\d{1,3}\.\d{1,3}$/) || // Local network
-               hostname.match(/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/); // Docker/containers
+               hostname.match(/^192\.168\.\d{1,3}\.\d{1,3}$/) ||
+               hostname.match(/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
     }
 
-    // Check reconnection status
-    async function checkReconnectionStatus() {
+    async function fetchStatus() {
         if (!config.checkStatus) return null;
         
         // Try local dev file first when running locally
         if (isLocalhost()) {
             try {
                 const devUrl = '/reconnection-status.dev.json?t=' + Date.now();
-                console.log('[CircuitHandler] Trying local dev status file:', devUrl);
-                
-                const devResponse = await fetch(devUrl, {
-                    cache: 'no-cache',
-                    headers: { 'Accept': 'application/json' }
-                });
-                
+                const devResponse = await fetch(devUrl, { cache: 'no-cache' });
                 if (devResponse.ok) {
                     const status = await devResponse.json();
                     console.log('[CircuitHandler] ✅ Local dev status loaded:', status);
+                    lastKnownStatus = status;
                     return status;
                 }
             } catch (e) {
-                console.log('[CircuitHandler] No local dev status file, falling back to configured URL');
+                // Fall through to production URL
             }
         }
         
-        // Fall back to configured statusUrl (production blob storage or default)
         try {
-            const response = await fetch(config.statusUrl + '?t=' + Date.now(), {
-                cache: 'no-cache',
-                headers: { 'Accept': 'application/json' }
-            });
-            
+            const response = await fetch(config.statusUrl + '?t=' + Date.now(), { cache: 'no-cache' });
             if (response.ok) {
                 const status = await response.json();
-                console.log('[CircuitHandler] Reconnection status loaded:', status);
-                lastKnownStatus = status; // Track for health monitor display
+                lastKnownStatus = status;
                 return status;
             }
         } catch (e) {
-            console.log('[CircuitHandler] Could not load reconnection status, using defaults');
+            console.log('[CircuitHandler] Could not fetch status:', e.message);
         }
         
         return null;
     }
 
-    // Get message from status
-    function getStatusMessage(status, isDeployment = false) {
-        if (!status) return null;
-        
-        if (isDeployment && status.deploymentMessage) {
-            return status.deploymentMessage;
-        }
-        
-        return status.reconnectingMessage || null;
-    }
-
-    // Check if status indicates deployment in progress (any non-normal status)
-    // Phases: preparing, deploying, verifying, switching, maintenance
+    // Check if status indicates deployment in progress
     function isDeploying(status) {
         if (!status) return false;
         const deploymentPhases = ['preparing', 'deploying', 'verifying', 'switching', 'maintenance'];
-        return deploymentPhases.includes(status.status) || status.deploymentMessage;
+        return deploymentPhases.includes(status.status) || !!status.deploymentMessage;
     }
     
-    // Get human-readable phase name for UI display
     function getPhaseLabel(status) {
         if (!status) return '';
         switch (status.status) {
@@ -140,14 +117,108 @@
         }
     }
 
-    // Show new version available banner
+    // ===== UI COMPONENTS =====
+    
+    function createSpinnerSvg(color = config.primaryColor) {
+        if (config.spinnerUrl) {
+            return `<img src="${config.spinnerUrl}" style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" alt="Loading" />`;
+        }
+        return `
+            <svg style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" fill="none" stroke="${color}" stroke-width="3" 
+                        stroke-dasharray="31.4" stroke-dashoffset="10" stroke-linecap="round"/>
+            </svg>
+        `;
+    }
+
+    function getDeploymentHtml(status) {
+        if (config.deploymentHtml) return config.deploymentHtml;
+        
+        const phaseLabel = getPhaseLabel(status);
+        const message = status?.deploymentMessage || 'Vi opdaterer systemet. Vent venligst...';
+        const features = status?.features || [];
+        const estimatedMinutes = status?.estimatedDurationMinutes || status?.estimatedMinutes;
+        const version = status?.version;
+        
+        let featuresHtml = '';
+        if (features.length > 0) {
+            featuresHtml = `
+                <ul style='margin: 1rem 0; padding-left: 1.5rem; text-align: left; color: #555;'>
+                    ${features.map(f => `<li>${f}</li>`).join('')}
+                </ul>
+            `;
+        }
+
+        let estimateHtml = estimatedMinutes ? `
+            <p style='margin: 0.5rem 0 0; color: #999; font-size: 0.9rem;'>
+                Forventet tid: ${estimatedMinutes} minut${estimatedMinutes !== 1 ? 'ter' : ''}
+            </p>
+        ` : '';
+
+        let versionHtml = version ? `
+            <p style='margin: 0.5rem 0 0; color: #bbb; font-size: 0.8rem;'>Version: ${version}</p>
+        ` : '';
+
+        return `
+            <div style='position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                        background: rgba(0, 0, 0, 0.85); z-index: 9999; 
+                        display: flex; align-items: center; justify-content: center;'>
+                <div style='background: white; padding: 3rem; border-radius: 12px; 
+                            max-width: 500px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.2);'>
+                    ${createSpinnerSvg()}
+                    <h3 style='margin: 0 0 1rem; color: #333; font-size: 1.5rem; font-weight: 500;'>
+                        ${phaseLabel || '🚀 Deploying Updates'}
+                    </h3>
+                    <p style='margin: 0 0 0.5rem; color: #666; font-size: 1rem;'>${message}</p>
+                    ${featuresHtml}
+                    ${estimateHtml}
+                    ${versionHtml}
+                    <p style='margin: 1.5rem 0 0; color: #999; font-size: 0.85rem;'>
+                        Siden opdateres automatisk når vi er klar.
+                    </p>
+                </div>
+            </div>
+            <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        `;
+    }
+
+    function getReconnectingHtml(status) {
+        if (config.reconnectingHtml) return config.reconnectingHtml;
+        
+        const message = status?.reconnectingMessage || 'Forbindelsen blev afbrudt. Forsøger at genoprette...';
+        
+        return `
+            <div style='position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                        background: rgba(0, 0, 0, 0.7); z-index: 9999; 
+                        display: flex; align-items: center; justify-content: center;'>
+                <div style='background: white; padding: 2rem; border-radius: 8px; 
+                            max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                    ${createSpinnerSvg()}
+                    <h3 style='margin: 0 0 0.5rem; color: #333; font-size: 1.25rem;'>Forbindelsen afbrudt</h3>
+                    <p style='margin: 0 0 0.25rem; color: #666; font-size: 0.95rem;'>${message}</p>
+                    <p style='margin: 0 0 1rem; color: #999; font-size: 0.85rem;'>
+                        Genopretter forbindelsen...
+                    </p>
+                    <button id='manual-reload-btn' 
+                            style='background: ${config.primaryColor}; color: white; border: none; 
+                                   padding: 0.5rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 0.95rem;'>
+                        Genindlæs nu
+                    </button>
+                </div>
+            </div>
+            <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        `;
+    }
+
+    // ===== VERSION BANNER =====
+    
     function showVersionBanner(newVersion) {
-        if (versionBanner) return; // Already showing
+        if (versionBanner) return;
         
         const message = config.versionUpdateMessage || 
                        'En ny version er tilgængelig - opdater siden når det passer dig';
         
-        console.log(`[CircuitHandler] New version available: ${initialVersion} → ${newVersion}`);
+        console.log(`[CircuitHandler] 🆕 New version: ${initialVersion} → ${newVersion}`);
         
         versionBanner = document.createElement('div');
         versionBanner.id = 'blazor-version-banner';
@@ -174,19 +245,10 @@
         
         document.body.appendChild(versionBanner);
         
-        // Wire up buttons
-        document.getElementById('version-reload-btn').onclick = () => {
-            console.log('[CircuitHandler] User clicked "Opdater nu", reloading...');
-            window.location.reload();
-        };
-        
-        document.getElementById('version-dismiss-btn').onclick = () => {
-            console.log('[CircuitHandler] User dismissed version banner');
-            hideVersionBanner();
-        };
+        document.getElementById('version-reload-btn').onclick = () => window.location.reload();
+        document.getElementById('version-dismiss-btn').onclick = () => hideVersionBanner();
     }
 
-    // Hide version banner
     function hideVersionBanner() {
         if (versionBanner) {
             versionBanner.remove();
@@ -194,81 +256,66 @@
         }
     }
 
-    // Start background version polling with adaptive intervals
-    // Normal mode: poll every 60s, Deploying mode: poll every 5s
-    function startVersionPolling() {
-        if (!config.checkStatus) return;
-        if (versionPollInterval) return; // Already polling
-        
-        // Start with normal interval, will switch to fast if deploying
-        currentPollInterval = config.normalPollInterval;
-        console.log('[CircuitHandler] Starting version polling (normal mode: every', currentPollInterval / 1000, 's)');
-        
-        // Fetch initial version immediately (don't wait for polling interval)
-        (async () => {
-            try {
-                const status = await checkReconnectionStatus();
-                if (status) {
-                    // Store initial commit (primary) and version (display)
-                    if (status.commit && !initialCommit) {
-                        initialCommit = status.commit;
-                        console.log('[CircuitHandler] Initial commit:', initialCommit.substring(0, 7));
-                    }
-                    if (status.version && !initialVersion) {
-                        initialVersion = status.version;
-                        console.log('[CircuitHandler] Initial version:', initialVersion);
-                    }
-                    // Check if deployment is in progress and adjust polling
-                    adjustPollingInterval(status);
-                }
-            } catch (e) {
-                console.log('[CircuitHandler] Could not fetch initial version:', e.message);
-            }
-        })();
-        
-        scheduleNextPoll();
-    }
+    // ===== DEPLOYMENT OVERLAY =====
     
-    // Schedule the next poll based on current interval
-    function scheduleNextPoll() {
-        if (versionPollInterval) {
-            clearTimeout(versionPollInterval);
+    function showDeploymentOverlay(status) {
+        if (deploymentOverlay) return;
+        
+        console.log('[CircuitHandler] 🚀 Showing deployment overlay');
+        
+        deploymentOverlay = document.createElement('div');
+        deploymentOverlay.id = 'blazor-deployment-overlay';
+        deploymentOverlay.innerHTML = getDeploymentHtml(status);
+        
+        if (config.customCss) {
+            const style = document.createElement('style');
+            style.textContent = config.customCss;
+            deploymentOverlay.appendChild(style);
         }
         
-        versionPollInterval = setTimeout(async () => {
-            const status = await checkReconnectionStatus();
-            if (status) {
-                // Store initial commit and version on first fetch
-                if (status.commit && !initialCommit) {
-                    initialCommit = status.commit;
-                    console.log('[CircuitHandler] Initial commit:', initialCommit.substring(0, 7));
-                }
-                if (status.version && !initialVersion) {
-                    initialVersion = status.version;
-                    console.log('[CircuitHandler] Initial version:', initialVersion);
-                }
-                
-                // Check if COMMIT changed AND deployment is complete (status === 'normal')
-                // Primary detection uses commit SHA, version is for display
-                const deploymentComplete = status.status === 'normal';
-                const commitChanged = status.commit && initialCommit && status.commit !== initialCommit;
-                
-                if (commitChanged && !versionBanner && deploymentComplete) {
-                    const displayVersion = status.version || status.commit.substring(0, 7);
-                    console.log(`[CircuitHandler] New version detected: ${initialCommit.substring(0, 7)} → ${status.commit.substring(0, 7)}`);
-                    showVersionBanner(displayVersion);
-                }
-                
-                // Adjust polling interval based on deployment status
-                adjustPollingInterval(status);
-            }
-            
-            // Schedule next poll
-            scheduleNextPoll();
-        }, currentPollInterval);
+        document.body.appendChild(deploymentOverlay);
     }
+
+    function hideDeploymentOverlay() {
+        if (deploymentOverlay) {
+            deploymentOverlay.remove();
+            deploymentOverlay = null;
+        }
+    }
+
+    // ===== RECONNECT MODAL (enhances Blazor's default) =====
     
-    // Adjust polling interval based on deployment status
+    function showReconnectModal(status) {
+        if (reconnectModal) return;
+        
+        console.log('[CircuitHandler] Showing reconnect UI');
+        
+        reconnectModal = document.createElement('div');
+        reconnectModal.id = 'blazor-reconnect-modal';
+        reconnectModal.innerHTML = getReconnectingHtml(status);
+        
+        if (config.customCss) {
+            const style = document.createElement('style');
+            style.textContent = config.customCss;
+            reconnectModal.appendChild(style);
+        }
+        
+        document.body.appendChild(reconnectModal);
+        
+        document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
+            window.location.reload();
+        });
+    }
+
+    function hideReconnectModal() {
+        if (reconnectModal) {
+            reconnectModal.remove();
+            reconnectModal = null;
+        }
+    }
+
+    // ===== STATUS POLLING =====
+    
     function adjustPollingInterval(status) {
         const wasDeploymentMode = isDeploymentMode;
         isDeploymentMode = isDeploying(status);
@@ -279,1026 +326,228 @@
             currentPollInterval = targetInterval;
             
             if (isDeploymentMode && !wasDeploymentMode) {
-                console.log('[CircuitHandler] 🚀 Deployment detected! Switching to fast polling (every', currentPollInterval / 1000, 's)');
+                console.log('[CircuitHandler] 🚀 Deployment detected! Fast polling (every', currentPollInterval / 1000, 's)');
             } else if (!isDeploymentMode && wasDeploymentMode) {
-                console.log('[CircuitHandler] ✅ Deployment complete. Switching to normal polling (every', currentPollInterval / 1000, 's)');
+                console.log('[CircuitHandler] ✅ Deployment complete. Normal polling (every', currentPollInterval / 1000, 's)');
+            }
+        }
+    }
+
+    async function pollStatus() {
+        const status = await fetchStatus();
+        
+        if (status) {
+            // Store initial identifiers on first fetch
+            if (!initialCommit && status.commit) {
+                initialCommit = status.commit;
+                console.log('[CircuitHandler] Initial commit:', initialCommit.substring(0, 7));
+            }
+            if (!initialVersion && status.version) {
+                initialVersion = status.version;
+                console.log('[CircuitHandler] Initial version:', initialVersion);
             }
             
-            // Reschedule with new interval
-            if (versionPollInterval) {
-                clearTimeout(versionPollInterval);
-                scheduleNextPoll();
-            }
-        }
-    }
-
-    // Stop version polling
-    function stopVersionPolling() {
-        if (versionPollInterval) {
-            clearTimeout(versionPollInterval);
-            versionPollInterval = null;
-        }
-        currentPollInterval = null;
-        isDeploymentMode = false;
-    }
-
-    // Connection health monitor
-    let connectionMonitorInterval = null;
-    let lastConnectionCheck = Date.now();
-    let healthCheckCount = 0;
-    let lastKnownStatus = null; // Track last status for health log display
-    
-    function startConnectionMonitor() {
-        if (connectionMonitorInterval) return;
-        
-        console.log('[CircuitHandler] 🩺 Starting connection health monitor (5s interval)');
-        lastConnectionCheck = Date.now();
-        healthCheckCount = 0;
-        
-        connectionMonitorInterval = setInterval(() => {
-            try {
-                healthCheckCount++;
-                const uptime = Math.floor((Date.now() - lastConnectionCheck) / 1000);
-                // Show actual phase from lastKnownStatus instead of just "Deploying"
-                let mode = '✅ Normal';
-                if (lastKnownStatus && lastKnownStatus.status) {
-                    switch (lastKnownStatus.status) {
-                        case 'preparing': mode = '🔧 Preparing'; break;
-                        case 'deploying': mode = '🚀 Deploying'; break;
-                        case 'verifying': mode = '🔍 Verifying'; break;
-                        case 'switching': mode = '🔄 Switching'; break;
-                        case 'maintenance': mode = '🛠️ Maintenance'; break;
-                        default: mode = '✅ Normal';
-                    }
-                }
-                const pollRate = currentPollInterval ? `${currentPollInterval / 1000}s` : 'stopped';
+            // Handle deployment mode
+            if (isDeploying(status)) {
+                showDeploymentOverlay(status);
+            } else {
+                hideDeploymentOverlay();
                 
-                console.log(`[CircuitHandler] 💓 Health #${healthCheckCount} | Mode: ${mode} | Poll: ${pollRate} | Version: ${initialVersion || 'pending'} | Online: ${navigator.onLine}`);
-            } catch (err) {
-                console.warn('[CircuitHandler] ⚠️ Health check error:', err.message);
+                // Check for version change (only after deployment completes)
+                const commitChanged = status.commit && initialCommit && status.commit !== initialCommit;
+                if (commitChanged && !versionBanner) {
+                    const displayVersion = status.version || status.commit.substring(0, 7);
+                    showVersionBanner(displayVersion);
+                }
             }
-        }, 5000);
+            
+            // Adjust polling speed
+            adjustPollingInterval(status);
+        }
+        
+        // Schedule next poll
+        scheduleNextPoll();
     }
+
+    function scheduleNextPoll() {
+        if (versionPollTimeout) {
+            clearTimeout(versionPollTimeout);
+        }
+        versionPollTimeout = setTimeout(pollStatus, currentPollInterval);
+    }
+
+    function startPolling() {
+        if (!config.checkStatus) return;
+        
+        console.log('[CircuitHandler] Starting status polling (every', config.normalPollInterval / 1000, 's)');
+        
+        // Initial poll
+        pollStatus();
+    }
+
+    function stopPolling() {
+        if (versionPollTimeout) {
+            clearTimeout(versionPollTimeout);
+            versionPollTimeout = null;
+        }
+    }
+
+    // ===== BLAZOR RECONNECT MODAL OBSERVER =====
+    // Watch for Blazor's default reconnect modal and enhance it
     
-    function stopConnectionMonitor() {
-        if (connectionMonitorInterval) {
-            clearInterval(connectionMonitorInterval);
-            connectionMonitorInterval = null;
-            console.log('[CircuitHandler] Connection health monitor stopped');
-        }
-    }
-
-    // Generate deployment/reconnection HTML with status
-    function getStatusHtml(status) {
-        const isDeploymentMode = isDeploying(status);
-        
-        if (isDeploymentMode && config.deploymentHtml) {
-            return config.deploymentHtml;
-        }
-        
-        if (!isDeploymentMode && config.reconnectingHtml) {
-            return config.reconnectingHtml;
-        }
-
-        const message = getStatusMessage(status, isDeploymentMode) || 
-                       (isDeploymentMode ? 'We are deploying new features. Please wait...' : 'Reconnecting...');
-        const features = status?.features || [];
-        const estimatedMinutes = status?.estimatedDurationMinutes || status?.estimatedMinutes;
-        const version = status?.version;
-        
-        let featuresHtml = '';
-        if (isDeploymentMode && features.length > 0) {
-            featuresHtml = `
-                <ul style='margin: 1rem 0; padding-left: 1.5rem; text-align: left; color: #555;'>
-                    ${features.map(f => `<li>${f}</li>`).join('')}
-                </ul>
-            `;
-        }
-
-        let estimateHtml = '';
-        if (isDeploymentMode && estimatedMinutes) {
-            estimateHtml = `
-                <p style='margin: 0.5rem 0 0; color: #999; font-size: 0.9rem;'>
-                    Estimated time: ${estimatedMinutes} minute${estimatedMinutes !== 1 ? 's' : ''}
-                </p>
-            `;
-        }
-
-        let versionHtml = '';
-        if (version) {
-            versionHtml = `
-                <p style='margin: 0.5rem 0 0; color: #bbb; font-size: 0.8rem;'>
-                    Version: ${version}
-                </p>
-            `;
-        }
-
-        const spinnerSvg = config.spinnerUrl 
-            ? `<img src="${config.spinnerUrl}" style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" alt="Loading" />`
-            : `<svg style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" fill="none" stroke="${config.primaryColor}" stroke-width="3" 
-                        stroke-dasharray="31.4" stroke-dashoffset="10" stroke-linecap="round"/>
-               </svg>`;
-        
-        const phaseLabel = isDeploymentMode ? getPhaseLabel(status) : '';
-        const title = isDeploymentMode ? (phaseLabel || '🚀 Deploying Updates') : 'Connection Lost';
-        const subtitle = isDeploymentMode 
-            ? 'The page will reload automatically when complete.'
-            : `Next attempt in <span id='countdown-seconds'>1</span>s`;
-        
-        return `
-            <div style='position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                        background: rgba(0, 0, 0, 0.85); z-index: 9999; 
-                        display: flex; align-items: center; justify-content: center;'>
-                <div style='background: white; padding: 3rem; border-radius: 12px; 
-                            max-width: 500px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.2);'>
-                    ${spinnerSvg}
-                    <h3 style='margin: 0 0 1rem; color: #333; font-size: 1.5rem; font-weight: 500;'>
-                        ${title}
-                    </h3>
-                    <p id='reconnect-status' style='margin: 0 0 0.5rem; color: #666; font-size: 1rem;'>
-                        ${message}
-                    </p>
-                    ${featuresHtml}
-                    ${estimateHtml}
-                    ${versionHtml}
-                    <p id='reconnect-countdown' style='margin: 1.5rem 0 ${isDeploymentMode ? '0' : '1rem'}; color: #999; font-size: 0.85rem;'>
-                        ${subtitle}
-                    </p>
-                    ${isDeploymentMode ? '' : `
-                        <button id='manual-reload-btn' 
-                                style='background: ${config.primaryColor}; color: white; border: none; 
-                                       padding: 0.75rem 2rem; border-radius: 6px; 
-                                       cursor: pointer; font-size: 1rem; font-weight: 500;
-                                       transition: background 0.2s;'>
-                            Genindlæs nu
-                        </button>
-                    `}
-                </div>
-            </div>
-            ${config.customCss ? '' : `<style>@keyframes spin { to { transform: rotate(360deg); } }</style>`}
-        `;
-    }
-    
-    // Generate default reconnecting HTML
-    function getDefaultReconnectingHtml() {
-        const spinnerSvg = config.spinnerUrl 
-            ? `<img src="${config.spinnerUrl}" style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" alt="Reconnecting" />`
-            : `<svg style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" fill="none" stroke="${config.primaryColor}" stroke-width="3" 
-                        stroke-dasharray="31.4" stroke-dashoffset="10" stroke-linecap="round"/>
-               </svg>`;
-        
-        return `
-            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                        background: rgba(0, 0, 0, 0.7); z-index: 9999; 
-                        display: flex; align-items: center; justify-content: center;">
-                <div style="background: white; padding: 2rem; border-radius: 8px; 
-                            max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    ${spinnerSvg}
-                    <h3 style="margin: 0 0 0.5rem; color: #333; font-size: 1.25rem;">Connection Lost</h3>
-                    <p id="reconnect-status" style="margin: 0 0 0.25rem; color: #666; font-size: 0.95rem;">
-                        Reconnecting...
-                    </p>
-                    <p id="reconnect-countdown" style="margin: 0 0 1rem; color: #999; font-size: 0.85rem;">
-                        Next attempt in <span id="countdown-seconds">1</span>s
-                    </p>
-                    <button id="manual-reload-btn" style="background: ${config.primaryColor}; color: white; border: none; 
-                                                           padding: 0.5rem 1.5rem; border-radius: 4px; 
-                                                           cursor: pointer; font-size: 0.95rem;">
-                        Reload Now
-                    </button>
-                </div>
-            </div>
-            ${config.customCss ? '' : `<style>@keyframes spin { to { transform: rotate(360deg); } }</style>`}
-        `;
-    }
-    
-    // Generate default server restart HTML
-    function getDefaultServerRestartHtml() {
-        const spinnerSvg = config.spinnerUrl 
-            ? `<img src="${config.spinnerUrl}" style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" alt="Reconnecting" />`
-            : `<svg style="width: 48px; height: 48px; margin: 0 auto 1rem; animation: spin 1s linear infinite;" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" fill="none" stroke="${config.successColor}" stroke-width="3" 
-                        stroke-dasharray="31.4" stroke-dashoffset="10" stroke-linecap="round"/>
-               </svg>`;
-        
-        return `
-            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                        background: rgba(0, 0, 0, 0.7); z-index: 9999; 
-                        display: flex; align-items: center; justify-content: center;">
-                <div style="background: white; padding: 2rem; border-radius: 8px; 
-                            max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    ${spinnerSvg}
-                    <h3 style="margin: 0 0 0.5rem; color: #333; font-size: 1.25rem;">Reconnecting...</h3>
-                    <p style="margin: 0 0 1rem; color: #666; font-size: 0.95rem;">
-                        Please wait a moment...
-                    </p>
-                </div>
-            </div>
-            ${config.customCss ? '' : `<style>@keyframes spin { to { transform: rotate(360deg); } }</style>`}
-        `;
-    }
-
-    // Show reconnection UI (simplified, no attempt counter)
-    async function showReconnectingUI() {
-        if (isInitialLoad || reconnectModal) return;
-
-        reconnectModal = document.createElement('div');
-        reconnectModal.id = 'blazor-reconnect-modal';
-        
-        // Try to load status to decide which UI to show
-        let status = null;
-        try {
-            status = await checkReconnectionStatus();
-            reconnectModal.innerHTML = getStatusHtml(status);
-        } catch {
-            reconnectModal.innerHTML = config.reconnectingHtml || getDefaultReconnectingHtml();
-        }
-        
-        // Inject custom CSS if provided
-        if (config.customCss) {
-            const style = document.createElement('style');
-            style.textContent = config.customCss;
-            reconnectModal.appendChild(style);
-        }
-        
-        document.body.appendChild(reconnectModal);
-
-        document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
-            window.location.reload();
+    function setupReconnectModalObserver() {
+        const observer = new MutationObserver(async () => {
+            const defaultModal = document.getElementById('components-reconnect-modal');
+            
+            if (defaultModal && !isInitialLoad) {
+                // Blazor's default modal appeared - hide it and show ours
+                console.log('[CircuitHandler] Default reconnect modal detected');
+                defaultModal.style.display = 'none';
+                
+                const status = await fetchStatus();
+                
+                if (isDeploying(status)) {
+                    showDeploymentOverlay(status);
+                } else {
+                    showReconnectModal(status);
+                }
+            } else if (!defaultModal && (reconnectModal || deploymentOverlay)) {
+                // Default modal removed = connection restored
+                console.log('[CircuitHandler] Connection restored, hiding overlays');
+                hideReconnectModal();
+                hideDeploymentOverlay();
+            }
         });
         
-        // If deployment mode, start polling for completion
-        if (status && isDeploying(status)) {
-            console.log('[CircuitHandler] Starting deployment completion polling...');
-            lastVersion = status.version;
-            
-            statusCheckInterval = setInterval(async () => {
-                const newStatus = await checkReconnectionStatus();
-                
-                if (!newStatus) {
-                    console.log('[CircuitHandler] Status file removed, reloading...');
-                    clearInterval(statusCheckInterval);
-                    window.location.reload();
-                    return;
-                }
-                
-                // Check if version changed or no longer deploying
-                if (newStatus.version !== lastVersion || !isDeploying(newStatus)) {
-                    console.log('[CircuitHandler] Deployment completed (status changed), reloading...');
-                    clearInterval(statusCheckInterval);
-                    window.location.reload();
-                    return;
-                }
-                
-                // CRITICAL: Test if new site is live by attempting circuit reconnect
-                try {
-                    const healthCheck = await fetch(window.location.origin + '/health', {
-                        method: 'HEAD',
-                        cache: 'no-cache',
-                        signal: AbortSignal.timeout(3000)
-                    });
-                    
-                    if (healthCheck.ok) {
-                        console.log('[CircuitHandler] Health check OK, testing if new server is live...');
-                        
-                        try {
-                            const reconnectResult = await Blazor.reconnect();
-                            
-                            if (reconnectResult === false) {
-                                // Circuit rejected = new server is live
-                                console.log('[CircuitHandler] New server detected (circuit rejected), reloading...');
-                                clearInterval(statusCheckInterval);
-                                window.location.reload();
-                                return;
-                            } else if (reconnectResult === true) {
-                                // Reconnected to old server - keep waiting
-                                console.log('[CircuitHandler] Still on old server, waiting for traffic switch...');
-                            }
-                        } catch (err) {
-                            // Circuit error = new server
-                            if (err?.toString().includes('circuit') || err?.toString().includes('expired')) {
-                                console.log('[CircuitHandler] Circuit error = new server is live, reloading...');
-                                clearInterval(statusCheckInterval);
-                                window.location.reload();
-                                return;
-                            }
-                        }
-                    }
-                } catch (healthError) {
-                    console.log('[CircuitHandler] Health check failed, will retry...');
-                }
-            }, config.statusPollInterval);
-        } else {
-            // Normal reconnection mode - start countdown
-            startCountdown();
-        }
+        observer.observe(document.body, { childList: true, subtree: true });
+        console.log('[CircuitHandler] Watching for Blazor reconnect modal');
     }
 
-    // Countdown timer
-    let countdownInterval = null;
-    let countdownSeconds = Math.ceil(currentInterval / 1000);
+    // ===== ERROR SUPPRESSION =====
+    // Suppress noisy console errors during reconnection
     
-    function startCountdown() {
-        countdownSeconds = Math.ceil(currentInterval / 1000);
-        updateCountdownDisplay();
-        
-        if (countdownInterval) clearInterval(countdownInterval);
-        
-        countdownInterval = setInterval(() => {
-            countdownSeconds--;
-            updateCountdownDisplay();
-            
-            if (countdownSeconds <= 0) {
-                countdownSeconds = Math.ceil(currentInterval / 1000);
-            }
-        }, 1000);
-    }
-    
-    function updateCountdownDisplay() {
-        const countdownEl = document.getElementById('countdown-seconds');
-        if (countdownEl) {
-            countdownEl.textContent = countdownSeconds;
-        }
-    }
-
-    // Show server restart UI (auto-reloads after brief delay)
-    function showServerRestartUI() {
-        if (isInitialLoad) return;
-        
-        hideReconnectUI();
-        
-        const restartUI = document.createElement('div');
-        restartUI.id = 'blazor-reconnect-modal';
-        restartUI.innerHTML = config.serverRestartHtml || getDefaultServerRestartHtml();
-        
-        // Inject custom CSS if provided
-        if (config.customCss) {
-            const style = document.createElement('style');
-            style.textContent = config.customCss;
-            restartUI.appendChild(style);
-        }
-        
-        document.body.appendChild(restartUI);
-    }
-
-    // Hide reconnection UI
-    function hideReconnectUI() {
-        if (countdownInterval) {
-            clearInterval(countdownInterval);
-            countdownInterval = null;
-        }
-        
-        const modal = document.getElementById('blazor-reconnect-modal');
-        if (modal) {
-            modal.remove();
-            reconnectModal = null;
-        }
-        
-        // Reset interval to initial value on successful reconnection
-        currentInterval = initialInterval;
-    }
-
-    // Suppress MudBlazor and expected disconnection errors
     const originalConsoleError = console.error;
     console.error = function(...args) {
         const message = args.join(' ');
         
-        // Suppress known errors during disconnection
-        if (message.includes('Cannot send data if the connection is not in the') ||
-            message.includes('MudResizeListener') ||
-            message.includes('Invocation canceled due to the underlying connection') ||
-            message.includes('Failed to complete negotiation') ||
-            message.includes('Failed to fetch') ||
-            message.includes('Failed to start the connection') ||
-            message.includes('Connection disconnected with error') ||
-            message.includes('WebSocket closed with status code: 1006') ||
-            message.includes('no reason given')) {
-            return;
+        // Suppress known benign errors during disconnection
+        const suppressPatterns = [
+            'Cannot send data if the connection is not in the',
+            'MudResizeListener',
+            'Invocation canceled due to the underlying connection',
+            'Failed to complete negotiation',
+            'Failed to fetch',
+            'Failed to start the connection',
+            'Connection disconnected with error',
+            'WebSocket closed with status code: 1006',
+            'no reason given'
+        ];
+        
+        if (suppressPatterns.some(p => message.includes(p))) {
+            return; // Suppress
         }
         
-        // Check for circuit expiry - trigger reload
+        // Detect circuit expiry - trigger reload
         if (message.includes('circuit state could not be retrieved') ||
             (message.includes('circuit') && message.includes('expired'))) {
-            console.log('[CircuitHandler] Circuit expired detected, reloading in 2 seconds...');
-            
-            // Show server restart UI
-            if (reconnectModal) {
-                reconnectModal.innerHTML = config.serverRestartHtml || getDefaultServerRestartHtml();
-            }
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-            
+            console.log('[CircuitHandler] Circuit expired, reloading in 2 seconds...');
+            setTimeout(() => window.location.reload(), 2000);
             return;
         }
         
         originalConsoleError.apply(console, args);
     };
 
-    // Infinite reconnection with exponential backoff
-    let reconnectionProcess = null;
-
-    const startReconnectionProcess = () => {
-        if (reconnectionProcess) return reconnectionProcess;
-        
-        currentInterval = initialInterval;
-        let isCanceled = false;
-        let attemptCount = 0;
-
-        reconnectionProcess = (async () => {
-            while (!isCanceled) {
-                attemptCount++;
-                
-                // Wait before attempting (except first attempt)
-                if (attemptCount > 1) {
-                    console.log(`[CircuitHandler] Waiting ${currentInterval}ms before attempt ${attemptCount}...`);
-                    await new Promise(resolve => setTimeout(resolve, currentInterval));
-                    
-                    // Exponential backoff: 1s → 2s → 3s → 5s (max)
-                    if (currentInterval < maxInterval) {
-                        currentInterval = Math.min(currentInterval + 1000, maxInterval);
-                        countdownSeconds = Math.ceil(currentInterval / 1000);
-                    }
-                }
-
-                if (isCanceled) return;
-
-                // Pause attempts while offline or tab hidden
-                if (isOffline || document.hidden) {
-                    const reason = isOffline ? 'offline' : 'tab hidden';
-                    console.log(`[CircuitHandler] Skipping attempt (${reason})`);
-                    continue;
-                }
-
-                console.log(`[CircuitHandler] Reconnect attempt ${attemptCount}/${showUIAfterAttempts} (${currentInterval}ms interval)`);
-
-                // Only show UI after 5 attempts (silent reconnection first)
-                if (attemptCount === showUIAfterAttempts) {
-                    console.log('[CircuitHandler] Showing reconnection UI after 5 silent attempts');
-                    await showReconnectingUI();
-                }
-
-                try {
-                    const result = await Blazor.reconnect();
-                    
-                    if (result) {
-                        // Successfully reconnected
-                        console.log(`[CircuitHandler] Successfully reconnected after ${attemptCount} attempts`);
-                        hideReconnectUI();
-                        reconnectionProcess = null;
-                        return;
-                    }
-                    
-                    // Server reached but connection rejected - reload (only show UI if past threshold)
-                    if (result === false) {
-                        console.log(`[CircuitHandler] Connection rejected after ${attemptCount} attempts, reloading...`);
-                        if (attemptCount >= showUIAfterAttempts) {
-                            showServerRestartUI();
-                        }
-                        setTimeout(() => window.location.reload(), 1000);
-                        return;
-                    }
-                } catch (error) {
-                    const errorMsg = error?.toString() || '';
-                    
-                    // Circuit expired (server restarted) - reload (only show UI if past threshold)
-                    if (errorMsg.includes('circuit state could not be retrieved') ||
-                        (errorMsg.includes('circuit') && errorMsg.includes('expired'))) {
-                        console.log(`[CircuitHandler] Circuit expired after ${attemptCount} attempts (server restarted), reloading...`);
-                        if (attemptCount >= showUIAfterAttempts) {
-                            showServerRestartUI();
-                        }
-                        setTimeout(() => window.location.reload(), 1000);
-                        return;
-                    }
-                    
-                    console.log(`[CircuitHandler] Reconnection attempt ${attemptCount} failed, will retry...`);
-                }
-            }
-        })();
-
-        return {
-            cancel: () => {
-                isCanceled = true;
-                hideReconnectUI();
-                reconnectionProcess = null;
-            }
-        };
-    };
-
-    // Network online/offline awareness to improve reliability
-    window.addEventListener('offline', () => {
-        isOffline = true;
-        console.log('[CircuitHandler] Browser is offline; pausing reconnection attempts');
-        if (!reconnectModal && !isInitialLoad) {
-            // Show lightweight offline notice
-            reconnectModal = document.createElement('div');
-            reconnectModal.id = 'blazor-reconnect-modal';
-            reconnectModal.innerHTML = `
-                <div style='position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center;'>
-                    <div style='background: white; padding: 2rem; border-radius: 8px; text-align: center; max-width: 420px;'>
-                        <h3 style='margin: 0 0 0.5rem; color: #333;'>No internet connection</h3>
-                        <p style='margin: 0; color: #666;'>We will reconnect automatically when you're back online.</p>
-                    </div>
-                </div>`;
-            document.body.appendChild(reconnectModal);
-        }
-    });
-    window.addEventListener('online', async () => {
-        isOffline = false;
-        console.log('[CircuitHandler] Browser is online; resuming reconnection attempts');
-        // Replace offline notice with proper reconnection UI/status
-        if (reconnectModal) {
-            try {
-                const status = await checkReconnectionStatus();
-                reconnectModal.innerHTML = getStatusHtml(status);
-            } catch {
-                // keep existing UI
-            }
-        }
-        // Reset backoff for quicker retry after regaining connectivity
-        currentInterval = initialInterval;
-    });
-
-    // 🧪 TESTING API - Expose methods for manual testing (defined early so it's always available)
-    window.BlazorReconnectionTest = {
-        disconnect: () => {
-            console.log('[Blazor Test] 🔌 Forcing circuit disconnect...');
-            try {
-                const blazor = window.Blazor;
-                if (blazor?._internal?.dotNetExports?.INTERNAL?.getConnection) {
-                    const connection = blazor._internal.dotNetExports.INTERNAL.getConnection();
-                    connection.stop();
-                    console.log('[Blazor Test] ✅ Circuit disconnected. Reconnection UI should appear.');
-                } else {
-                    console.error('[Blazor Test] ❌ Could not access Blazor connection. Make sure Blazor is started.');
-                }
-            } catch (err) {
-                console.error('[Blazor Test] ❌ Error disconnecting:', err);
-            }
-        },
-        goOffline: () => {
-            console.log('[Blazor Test] 📡 Simulating offline mode...');
-            window.dispatchEvent(new Event('offline'));
-            console.log('[Blazor Test] ✅ Offline event dispatched. UI should reflect offline state.');
-        },
-        goOnline: () => {
-            console.log('[Blazor Test] 📡 Simulating online mode...');
-            window.dispatchEvent(new Event('online'));
-            console.log('[Blazor Test] ✅ Online event dispatched. Reconnection should attempt.');
-        },
-        status: () => {
-            const pollingMode = isDeploymentMode ? 'deploying (fast)' : 'normal (slow)';
-            const intervalSecs = currentPollInterval ? (currentPollInterval / 1000) + 's' : 'stopped';
-            console.log('[Blazor Test] 📊 Current Status:', {
-                isOnline: navigator.onLine,
-                reconnectionStatus: reconnectionStatus,
-                initialVersion: initialVersion,
-                pollingMode: pollingMode,
-                pollInterval: intervalSecs,
-                versionBannerVisible: !!versionBanner,
-                modalVisible: reconnectModal?.style?.display !== 'none'
-            });
-        },
-        refreshStatus: async () => {
-            console.log('[Blazor Test] 🔄 Refreshing reconnection status from server...');
-            const status = await checkReconnectionStatus();
-            console.log('[Blazor Test] ✅ Status refreshed:', status);
-            return status;
-        },
-        simulateVersionChange: (newVersion) => {
-            console.log(`[Blazor Test] 🎭 Simulating version change: ${initialVersion} → ${newVersion}`);
-            if (!initialVersion) {
-                console.warn('[Blazor Test] ⚠️ Initial version not set yet. Wait a moment after page load.');
-                return;
-            }
-            showVersionBanner(newVersion);
-        },
-        hideVersionBanner: () => {
-            console.log('[Blazor Test] 🙈 Hiding version banner');
-            hideVersionBanner();
-        },
-        stopMonitor: () => {
-            console.log('[Blazor Test] 🛑 Stopping connection health monitor');
-            stopConnectionMonitor();
-        },
-        startMonitor: () => {
-            console.log('[Blazor Test] ▶️  Starting connection health monitor');
-            startConnectionMonitor();
-        }
-    };
-
-    console.log('[CircuitHandler] 🧪 Testing API available: BlazorReconnectionTest.disconnect(), .goOffline(), .goOnline(), .status(), .refreshStatus(), .simulateVersionChange(), .hideVersionBanner(), .stopMonitor(), .startMonitor()');
-
-    // Check if Blazor has already started (handles autostart scenarios)
-    if (window.Blazor && typeof window.Blazor._internal !== 'undefined') {
-        console.log('[CircuitHandler] Already started, hooking into existing reconnection system');
-        
-        // Listen for circuit expiry errors and auto-reload
-        window.addEventListener('unhandledrejection', (event) => {
-            const error = event.reason?.toString() || '';
-            if (error.includes('circuit state could not be retrieved') || 
-                error.includes('circuit') && error.includes('expired')) {
-                console.log('[CircuitHandler] Circuit expired, reloading page in 2 seconds...');
-                event.preventDefault();
-                
-                // Show server restart UI briefly before reload
-                if (reconnectModal) {
-                    reconnectModal.innerHTML = config.serverRestartHtml || getDefaultServerRestartHtml();
-                }
-                
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
-            }
-        });
-        
-        // Monitor for the default Blazor reconnect modal and replace it with ours
-        const observer = new MutationObserver(async () => {
-            const defaultModal = document.getElementById('components-reconnect-modal');
-            if (defaultModal && !isInitialLoad) {
-                console.log('[CircuitHandler] Default reconnect modal detected, loading status...');
-                
-                // Load reconnection status
-                reconnectionStatus = await checkReconnectionStatus();
-                const deploymentMode = isDeploying(reconnectionStatus);
-                
-                if (deploymentMode) {
-                    console.log('[CircuitHandler] Deployment mode - showing deployment UI');
-                } else {
-                    console.log('[CircuitHandler] Normal mode - showing reconnection UI');
-                }
-                
-                defaultModal.style.display = 'none';
-                
-                if (!reconnectModal) {
-                    reconnectModal = document.createElement('div');
-                    reconnectModal.id = 'blazor-reconnect-modal';
-                    reconnectModal.innerHTML = getStatusHtml(reconnectionStatus);
-                    
-                    if (config.customCss) {
-                        const style = document.createElement('style');
-                        style.textContent = config.customCss;
-                        reconnectModal.appendChild(style);
-                    }
-                    
-                    document.body.appendChild(reconnectModal);
-                    
-                    if (deploymentMode) {
-                        // Poll for deployment completion
-                        lastVersion = reconnectionStatus?.version;
-                        statusCheckInterval = setInterval(async () => {
-                            const status = await checkReconnectionStatus();
-                            if (!status) {
-                                console.log('[CircuitHandler] Status file removed, reloading...');
-                                clearInterval(statusCheckInterval);
-                                window.location.reload();
-                                return;
-                            }
-                            
-                            // Check if version changed or no longer deploying
-                            if (status.version !== lastVersion || !isDeploying(status)) {
-                                console.log('[CircuitHandler] Deployment completed (version or status changed), reloading...');
-                                clearInterval(statusCheckInterval);
-                                window.location.reload();
-                                return;
-                            }
-                            
-                            // CRITICAL: Check if new site is responding (blue-green traffic switch)
-                            // Even if status file still says "deploying", the new container might be live
-                            try {
-                                const healthCheck = await fetch(window.location.origin + '/health', {
-                                    method: 'HEAD',
-                                    cache: 'no-cache',
-                                    signal: AbortSignal.timeout(3000)
-                                });
-                                
-                                // Check if we're hitting a different container (new deployment)
-                                // by trying to reconnect - if circuit is rejected, it means new server
-                                if (healthCheck.ok) {
-                                    console.log('[CircuitHandler] Health check OK, testing circuit...');
-                                    
-                                    try {
-                                        const reconnectResult = await Blazor.reconnect();
-                                        
-                                        if (reconnectResult === false) {
-                                            // Circuit rejected = new server version is live
-                                            console.log('[CircuitHandler] New server detected (circuit rejected), reloading...');
-                                            clearInterval(statusCheckInterval);
-                                            window.location.reload();
-                                            return;
-                                        } else if (reconnectResult === true) {
-                                            // Successfully reconnected to old server - keep waiting
-                                            console.log('[CircuitHandler] Still connected to old server, waiting for traffic switch...');
-                                        }
-                                    } catch (err) {
-                                        // Circuit error = likely new server
-                                        if (err?.toString().includes('circuit') || err?.toString().includes('expired')) {
-                                            console.log('[CircuitHandler] Circuit error detected, new server is live, reloading...');
-                                            clearInterval(statusCheckInterval);
-                                            window.location.reload();
-                                            return;
-                                        }
-                                    }
-                                }
-                            } catch (healthError) {
-                                console.log('[CircuitHandler] Health check failed (site may be switching), will retry...');
-                            }
-                        }, config.statusPollInterval);
-                    } else {
-                        // Setup manual reload button for normal reconnection
-                        const reloadBtn = document.getElementById('manual-reload-btn');
-                        if (reloadBtn) {
-                            reloadBtn.onclick = () => window.location.reload();
-                        }
-                        
-                        // Start actual reconnection attempts with exponential backoff
-                        let attemptCount = 0;
-                        let reconnectInterval = initialInterval;
-                        let reconnectTimeout = null;
-                        let isPaused = false; // Paused when tab is not visible
-                        
-                        const attemptReconnect = async () => {
-                            if (isOffline) {
-                                console.log('[CircuitHandler] Skipping attempt (offline)');
-                                scheduleNextAttempt();
-                                return;
-                            }
-                            if (isPaused) {
-                                console.log('[CircuitHandler] Skipping attempt (tab is not visible)');
-                                scheduleNextAttempt();
-                                return;
-                            }
-                            
-                            attemptCount++;
-                            console.log(`[CircuitHandler] Reconnection attempt ${attemptCount} (interval: ${reconnectInterval}ms)`);
-                            
-                            try {
-                                const result = await Blazor.reconnect();
-                                
-                                if (result) {
-                                    console.log(`[CircuitHandler] Successfully reconnected after ${attemptCount} attempts`);
-                                    hideReconnectUI();
-                                    return;
-                                }
-                            } catch (error) {
-                                console.log(`[CircuitHandler] Attempt ${attemptCount} failed:`, error?.toString());
-                            }
-                            
-                            // Check if modal still exists
-                            if (document.getElementById('components-reconnect-modal')) {
-                                scheduleNextAttempt();
-                            } else {
-                                console.log('[CircuitHandler] Connection restored (default modal gone)');
-                                if (reconnectModal) {
-                                    reconnectModal.remove();
-                                    reconnectModal = null;
-                                }
-                            }
-                        };
-                        
-                        const scheduleNextAttempt = () => {
-                            if (reconnectTimeout) clearTimeout(reconnectTimeout);
-                            
-                            // Update countdown display
-                            const countdownElement = document.getElementById('countdown-seconds');
-                            if (countdownElement) {
-                                let countdown = Math.ceil(reconnectInterval / 1000);
-                                countdownElement.textContent = countdown;
-                                
-                                const countdownInterval = setInterval(() => {
-                                    countdown--;
-                                    if (countdownElement && countdown > 0) {
-                                        countdownElement.textContent = countdown;
-                                    } else {
-                                        clearInterval(countdownInterval);
-                                    }
-                                }, 1000);
-                            }
-                            
-                            // Schedule next attempt
-                            reconnectTimeout = setTimeout(() => {
-                                // Exponential backoff: 1s → 2s → 3s → 5s (max)
-                                if (reconnectInterval < maxInterval) {
-                                    reconnectInterval = Math.min(reconnectInterval + 1000, maxInterval);
-                                }
-                                attemptReconnect();
-                            }, reconnectInterval);
-                        };
-                        
-                        // Handle tab visibility (pause/resume reconnection attempts)
-                        document.addEventListener('visibilitychange', () => {
-                            if (document.hidden) {
-                                console.log('[CircuitHandler] Tab hidden, pausing reconnection attempts');
-                                isPaused = true;
-                                if (reconnectTimeout) {
-                                    clearTimeout(reconnectTimeout);
-                                    reconnectTimeout = null;
-                                }
-                            } else {
-                                console.log('[CircuitHandler] Tab visible again, resuming reconnection attempts');
-                                isPaused = false;
-                                // Resume immediately
-                                attemptReconnect();
-                            }
-                        });
-                        
-                        // Start first attempt
-                        scheduleNextAttempt();
-                    }
-                }
-            } else if (!defaultModal && reconnectModal) {
-                // Default modal removed = connection restored
-                console.log('[CircuitHandler] Connection restored, hiding custom UI');
-                if (statusCheckInterval) {
-                    clearInterval(statusCheckInterval);
-                }
-                reconnectModal.remove();
-                reconnectModal = null;
-                reconnectionStatus = null;
-            }
-        });
-        
-        observer.observe(document.body, { childList: true, subtree: true });
-        
-        // Mark initial load complete after brief delay
-        setTimeout(() => {
-            isInitialLoad = false;
-            console.log('[CircuitHandler] Custom reconnection handler active (monitoring mode)');
-            
-            // Start version polling after connection is stable (same as normal path)
-            startVersionPolling();
-            
-            // Start connection health monitoring (for testing/debugging)
-            startConnectionMonitor();
-        }, 1000);
-        
-        return;
-    }
-
-    // ===== RELIABLE BLAZOR STARTUP =====
-    // This section ensures Blazor.start() is called exactly once, even if:
-    // - blazor.web.js hasn't loaded yet
-    // - The script runs before DOM is ready
-    // - There are timing issues between scripts
+    // ===== CIRCUIT ERROR HANDLER =====
     
-    let blazorStarted = false;
-    
-    const startBlazorWithHandler = () => {
-        if (blazorStarted) {
-            console.log('[CircuitHandler] Blazor.start() already called, skipping');
-            return;
-        }
-        
-        if (typeof window.Blazor === 'undefined') {
-            console.error('[CircuitHandler] Cannot start - Blazor is undefined');
-            return;
-        }
-        
-        if (typeof window.Blazor.start !== 'function') {
-            console.error('[CircuitHandler] Cannot start - Blazor.start is not a function');
-            return;
-        }
-        
-        // Check if Blazor has already been started by something else
-        if (window.Blazor._internal) {
-            console.log('[CircuitHandler] Blazor already started externally, entering monitoring mode');
-            blazorStarted = true;
-            // Just set up monitoring without calling start
-            setTimeout(() => {
-                isInitialLoad = false;
-                console.log('[CircuitHandler] Monitoring mode active');
-                startVersionPolling();
-                startConnectionMonitor();
-            }, 1000);
-            return;
-        }
-        
-        blazorStarted = true;
-        console.log('[CircuitHandler] 🚀 Calling Blazor.start() now...');
-        
-        try {
-            Blazor.start({
-                circuit: {
-                    reconnectionHandler: {
-                        onConnectionDown: (options, error) => {
-                            if (isInitialLoad) return;
-                            console.log('[CircuitHandler] Connection down, starting infinite reconnection');
-                            startReconnectionProcess();
-                        },
-                        onConnectionUp: () => {
-                            if (isInitialLoad) return;
-                            console.log('[CircuitHandler] Connection restored');
-                            
-                            if (reconnectionProcess && reconnectionProcess.cancel) {
-                                reconnectionProcess.cancel();
-                            }
-                            
-                            hideReconnectUI();
-                        }
-                    }
-                }
-            }).then(() => {
-                console.log('[CircuitHandler] ✅ Blazor.start() completed successfully');
-                // Mark initial load complete after 1 second
-                setTimeout(() => {
-                    isInitialLoad = false;
-                    console.log('[CircuitHandler] Initial connection established, infinite reconnection handler active');
-                    
-                    // Start version polling after connection is stable
-                    startVersionPolling();
-                    
-                    // Start connection health monitoring (for testing/debugging)
-                    startConnectionMonitor();
-                }, 1000);
-            }).catch((err) => {
-                console.error('[CircuitHandler] ❌ Blazor.start() failed:', err);
-            });
-        } catch (err) {
-            console.error('[CircuitHandler] ❌ Exception calling Blazor.start():', err);
-            blazorStarted = false; // Allow retry
-        }
-    };
-
-    const tryStartBlazor = () => {
-        console.log('[CircuitHandler] Checking Blazor availability...');
-        console.log('[CircuitHandler]   window.Blazor:', typeof window.Blazor);
-        console.log('[CircuitHandler]   Blazor.start:', typeof window.Blazor?.start);
-        console.log('[CircuitHandler]   Blazor._internal:', typeof window.Blazor?._internal);
-        
-        if (typeof window.Blazor !== 'undefined' && typeof window.Blazor.start === 'function') {
-            startBlazorWithHandler();
-            return true;
-        }
-        return false;
-    };
-
-    // Strategy 1: Try immediately (Blazor might already be loaded)
-    if (tryStartBlazor()) {
-        console.log('[CircuitHandler] Started immediately');
-    } else {
-        console.log('[CircuitHandler] Blazor not ready, setting up watchers...');
-        
-        // Strategy 2: Poll every 50ms
-        let pollCount = 0;
-        const maxPolls = 200; // 10 seconds max
-        const pollInterval = setInterval(() => {
-            pollCount++;
-            if (tryStartBlazor()) {
-                console.log(`[CircuitHandler] Started after ${pollCount} polls (${pollCount * 50}ms)`);
-                clearInterval(pollInterval);
-            } else if (pollCount >= maxPolls) {
-                clearInterval(pollInterval);
-                console.error('[CircuitHandler] ❌ Timeout: Blazor never became available after 10 seconds');
-                console.error('[CircuitHandler] Check that blazor.web.js is loaded BEFORE this script');
-            }
-        }, 50);
-        
-        // Strategy 3: Also try on DOMContentLoaded (belt and suspenders)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                console.log('[CircuitHandler] DOMContentLoaded fired, trying to start Blazor...');
-                if (!blazorStarted) {
-                    // Give a tiny delay for any remaining script initialization
-                    setTimeout(tryStartBlazor, 100);
-                }
-            });
-        }
-        
-        // Strategy 4: Also try on window load (last resort)
-        window.addEventListener('load', () => {
-            console.log('[CircuitHandler] Window load fired');
-            if (!blazorStarted) {
-                console.log('[CircuitHandler] Still not started, trying again...');
-                setTimeout(tryStartBlazor, 100);
-            }
-        });
-    }
-
-    // Handle unhandled promise rejections for circuit errors
     window.addEventListener('unhandledrejection', (event) => {
         if (isInitialLoad) return;
 
         const error = event.reason?.toString() || '';
         
-        // Circuit expired (server restarted) - suppress and let reconnection handler deal with it
+        // Circuit expired - reload
         if (error.includes('circuit state could not be retrieved') ||
             (error.includes('circuit') && error.includes('expired'))) {
-            console.log('[CircuitHandler] Circuit expired error detected (suppressed, handled by reconnection process)');
+            console.log('[CircuitHandler] Circuit expired, reloading...');
             event.preventDefault();
+            setTimeout(() => window.location.reload(), 2000);
             return;
         }
         
-        // Suppress other circuit-related errors during reconnection
-        if (error.includes('circuit') || 
-            error.includes('connection being closed') ||
-            error.includes('Connection disconnected') ||
-            error.includes('Invocation canceled')) {
-            console.log('[CircuitHandler] Suppressed expected circuit error during reconnection');
+        // Suppress expected circuit errors
+        const suppressPatterns = ['circuit', 'connection being closed', 'Connection disconnected', 'Invocation canceled'];
+        if (suppressPatterns.some(p => error.includes(p))) {
+            console.log('[CircuitHandler] Suppressed expected circuit error');
             event.preventDefault();
         }
     });
+
+    // ===== NETWORK AWARENESS =====
+    
+    window.addEventListener('offline', () => {
+        console.log('[CircuitHandler] 📡 Browser went offline');
+    });
+
+    window.addEventListener('online', () => {
+        console.log('[CircuitHandler] 📡 Browser back online, checking status...');
+        pollStatus();
+    });
+
+    // ===== TESTING API =====
+    
+    window.BlazorReconnectionTest = {
+        status: () => {
+            console.log('[CircuitHandler] 📊 Status:', {
+                initialVersion,
+                initialCommit: initialCommit?.substring(0, 7),
+                lastKnownStatus,
+                isDeploymentMode,
+                pollingInterval: currentPollInterval / 1000 + 's',
+                versionBannerVisible: !!versionBanner,
+                deploymentOverlayVisible: !!deploymentOverlay,
+                reconnectModalVisible: !!reconnectModal
+            });
+        },
+        refreshStatus: async () => {
+            console.log('[CircuitHandler] 🔄 Refreshing status...');
+            await pollStatus();
+        },
+        showVersionBanner: (version) => {
+            showVersionBanner(version || 'test-version');
+        },
+        hideVersionBanner,
+        showDeployment: async () => {
+            const status = await fetchStatus() || { status: 'deploying', deploymentMessage: 'Test deployment' };
+            showDeploymentOverlay(status);
+        },
+        hideDeployment: hideDeploymentOverlay
+    };
+
+    console.log('[CircuitHandler] 🧪 Testing API: BlazorReconnectionTest.status(), .refreshStatus(), .showVersionBanner(), .showDeployment()');
+
+    // ===== INITIALIZATION =====
+    
+    function init() {
+        console.log('[CircuitHandler] ✅ Status overlay initialized (non-invasive mode)');
+        
+        // Wait a moment for Blazor to fully initialize
+        setTimeout(() => {
+            isInitialLoad = false;
+            
+            // Start polling for status updates
+            startPolling();
+            
+            // Watch for Blazor's reconnect modal
+            setupReconnectModalObserver();
+            
+        }, 1000);
+    }
+
+    // Start when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
 })();
