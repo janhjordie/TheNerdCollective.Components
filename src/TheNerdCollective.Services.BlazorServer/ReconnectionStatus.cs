@@ -19,7 +19,22 @@ public sealed class ReconnectionStatus
 
     public string? ReconnectingMessage { get; set; }
     public string? DeploymentMessage { get; set; }
+
+    /// <summary>
+    /// Human-readable version number (calculated from changelog)
+    /// </summary>
     public string? Version { get; set; }
+
+    /// <summary>
+    /// Current commit SHA (primary identifier for version detection)
+    /// </summary>
+    public string? Commit { get; set; }
+
+    /// <summary>
+    /// Incoming commit SHA during deployment (what's being deployed)
+    /// </summary>
+    public string? IncomingCommit { get; set; }
+
     public IReadOnlyList<string>? Features { get; set; }
     public int? EstimatedDurationMinutes { get; set; }
 }

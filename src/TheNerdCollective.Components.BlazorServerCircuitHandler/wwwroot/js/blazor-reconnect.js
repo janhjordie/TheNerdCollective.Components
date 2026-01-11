@@ -40,7 +40,8 @@
     let reconnectionStatus = null;
     let statusCheckInterval = null;
     let lastVersion = null;
-    let initialVersion = null; // Track version on page load
+    let initialCommit = null; // Track commit SHA on page load (primary identifier)
+    let initialVersion = null; // Track human-readable version on page load
     let versionBanner = null; // New version available banner
     let versionPollInterval = null; // Background version checking
     let currentPollInterval = null; // Track current polling interval
@@ -207,6 +208,11 @@
             try {
                 const status = await checkReconnectionStatus();
                 if (status) {
+                    // Store initial commit (primary) and version (display)
+                    if (status.commit && !initialCommit) {
+                        initialCommit = status.commit;
+                        console.log('[CircuitHandler] Initial commit:', initialCommit.substring(0, 7));
+                    }
                     if (status.version && !initialVersion) {
                         initialVersion = status.version;
                         console.log('[CircuitHandler] Initial version:', initialVersion);
@@ -231,17 +237,25 @@
         versionPollInterval = setTimeout(async () => {
             const status = await checkReconnectionStatus();
             if (status) {
-                // First time we get a version, store it as initial
+                // Store initial commit and version on first fetch
+                if (status.commit && !initialCommit) {
+                    initialCommit = status.commit;
+                    console.log('[CircuitHandler] Initial commit:', initialCommit.substring(0, 7));
+                }
                 if (status.version && !initialVersion) {
                     initialVersion = status.version;
                     console.log('[CircuitHandler] Initial version:', initialVersion);
                 }
                 
-                // Check if version changed AND deployment is complete (status === 'normal')
-                // Only show banner after health job resets status to normal
+                // Check if COMMIT changed AND deployment is complete (status === 'normal')
+                // Primary detection uses commit SHA, version is for display
                 const deploymentComplete = status.status === 'normal';
-                if (status.version && status.version !== initialVersion && !versionBanner && deploymentComplete) {
-                    showVersionBanner(status.version);
+                const commitChanged = status.commit && initialCommit && status.commit !== initialCommit;
+                
+                if (commitChanged && !versionBanner && deploymentComplete) {
+                    const displayVersion = status.version || status.commit.substring(0, 7);
+                    console.log(`[CircuitHandler] New version detected: ${initialCommit.substring(0, 7)} → ${status.commit.substring(0, 7)}`);
+                    showVersionBanner(displayVersion);
                 }
                 
                 // Adjust polling interval based on deployment status
