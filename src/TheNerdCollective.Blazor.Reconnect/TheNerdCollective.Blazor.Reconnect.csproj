@@ -4,19 +4,19 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>TheNerdCollective.Components.BlazorServerCircuitHandler</RootNamespace>
-    <AssemblyName>TheNerdCollective.Components.BlazorServerCircuitHandler</AssemblyName>
-    <PackageId>TheNerdCollective.Components.BlazorServerCircuitHandler</PackageId>
-    <Version>1.2.0</Version>
+    <RootNamespace>TheNerdCollective.Blazor.Reconnect</RootNamespace>
+    <AssemblyName>TheNerdCollective.Blazor.Reconnect</AssemblyName>
+    <PackageId>TheNerdCollective.Blazor.Reconnect</PackageId>
+    <Version>1.0.0</Version>
     <Authors>The Nerd Collective</Authors>
-    <Description>[DEPRECATED] This package is replaced by TheNerdCollective.Blazor.Reconnect and TheNerdCollective.Blazor.VersionMonitor. Please migrate to the new packages.</Description>
-    <PackageTags>blazor;blazor-server;circuit;reconnection;signalr;handler;ui;razor-component;deprecated</PackageTags>
+    <Description>A lightweight Blazor Server circuit reconnection handler. Shows professional reconnect UI when connection is lost, with health check and auto-reload on stuck circuits. Non-invasive - works with Blazor's default startup.</Description>
+    <PackageTags>blazor;blazor-server;circuit;reconnection;signalr;handler;ui</PackageTags>
     <License>Apache-2.0</License>
     <LicenseExpression>Apache-2.0</LicenseExpression>
     <RepositoryUrl>https://github.com/janhjordie/TheNerdCollective.Components</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageDeprecated>true</PackageDeprecated>
+    <PackageIcon>icon.png</PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="icon.png" Pack="true" PackagePath="\" Condition="Exists('icon.png')" />
   </ItemGroup>
 
 </Project>

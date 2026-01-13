@@ -1,5 +1,14 @@
 # TheNerdCollective.Components.BlazorServerCircuitHandler
 
+> ⚠️ **DEPRECATED** - This package is being replaced by two focused packages:
+>
+> - **[TheNerdCollective.Blazor.Reconnect](https://www.nuget.org/packages/TheNerdCollective.Blazor.Reconnect)** - Circuit reconnection UI with health check and auto-reload
+> - **[TheNerdCollective.Blazor.VersionMonitor](https://www.nuget.org/packages/TheNerdCollective.Blazor.VersionMonitor)** - Version detection and update banner
+>
+> This package will no longer receive updates. Please migrate to the new packages.
+
+---
+
 A lightweight, non-invasive deployment status overlay for Blazor Server applications.
 
 ## Overview
