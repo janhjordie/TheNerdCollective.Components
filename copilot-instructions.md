@@ -207,6 +207,17 @@ When user says "release MudComponent", "release Services", "release Components",
 
 **Note:** Replace X.Y.Z with actual version number and <description> with meaningful release description. Always ask user for the version and description if not provided.
 
+### ⚠️ When Creating New Packages
+
+**IMPORTANT:** When you create a new NuGet package in this repository, you MUST also add it to the GitHub Actions workflow:
+
+1. Open `.github/workflows/publish-packages.yml`
+2. Find the `declare -A PACKAGES=(` section
+3. Add a new line: `["PackageName"]="src/PackageName"`
+4. Commit the workflow change along with the new package
+
+Without this step, the package will NOT be automatically published to NuGet!
+
 ### 🔄 If Publishing Fails:
 Simply bump the patch version again:
 ```
