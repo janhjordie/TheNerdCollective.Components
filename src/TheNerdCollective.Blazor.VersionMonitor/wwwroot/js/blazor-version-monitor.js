@@ -44,6 +44,8 @@
     let versionBanner = null;
     let lastKnownStatus = null;
     let isDeploymentMode = false;
+    let consecutiveFailures = 0;
+    let maxConsecutiveFailures = 10;
 
     // ===== UTILITY FUNCTIONS =====
     
@@ -59,34 +61,69 @@
     async function fetchStatus() {
         if (!config.enabled) return null;
         
-        // Try local dev file first when running locally
-        if (isLocalhost()) {
-            try {
-                const devUrl = '/reconnection-status.dev.json?t=' + Date.now();
-                const devResponse = await fetch(devUrl, { cache: 'no-cache' });
-                if (devResponse.ok) {
-                    const status = await devResponse.json();
-                    console.log('[VersionMonitor] ✅ Local dev status:', status);
-                    lastKnownStatus = status;
-                    return status;
-                }
-            } catch (e) {
-                // Fall through to production URL
-            }
-        }
-        
         try {
-            const response = await fetch(config.statusUrl + '?t=' + Date.now(), { cache: 'no-cache' });
-            if (response.ok) {
-                const status = await response.json();
-                lastKnownStatus = status;
-                return status;
+            // Try local dev file first when running locally
+            if (isLocalhost()) {
+                try {
+                    const devUrl = '/reconnection-status.dev.json?t=' + Date.now();
+                    const devResponse = await fetch(devUrl, { cache: 'no-cache', signal: AbortSignal.timeout(10000) });
+                    if (devResponse.ok) {
+                        const status = await devResponse.json();
+                        console.log('[VersionMonitor] ✅ Local dev status:', status);
+                        lastKnownStatus = status;
+                        consecutiveFailures = 0;
+                        return status;
+                    }
+                } catch (e) {
+                    // Fall through to production URL
+                    if (!(e instanceof TypeError || e.name === 'AbortError')) {
+                        console.log('[VersionMonitor] Dev status not available:', e.message);
+                    }
+                }
+            }
+            
+            // Fetch with timeout to prevent hanging
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            
+            try {
+                const response = await fetch(config.statusUrl + '?t=' + Date.now(), { 
+                    cache: 'no-cache',
+                    signal: controller.signal 
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    const status = await response.json();
+                    lastKnownStatus = status;
+                    consecutiveFailures = 0;
+                    return status;
+                } else {
+                    console.warn('[VersionMonitor] Status endpoint returned', response.status);
+                    return null;
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                
+                // Handle timeout vs other errors
+                if (fetchError.name === 'AbortError') {
+                    console.warn('[VersionMonitor] ⏱️ Status endpoint timeout (15s)');
+                } else if (fetchError instanceof TypeError) {
+                    console.warn('[VersionMonitor] 🌐 Network error:', fetchError.message);
+                } else {
+                    console.warn('[VersionMonitor] Fetch error:', fetchError.message);
+                }
+                
+                consecutiveFailures++;
+                return null;
             }
         } catch (e) {
-            console.log('[VersionMonitor] Could not fetch status:', e.message);
+            // Catch-all for any unexpected errors to prevent circuit breaks
+            console.error('[VersionMonitor] Unexpected error in fetchStatus:', e);
+            consecutiveFailures++;
+            return null;
         }
-        
-        return null;
     }
 
     function isDeploying(status) {
@@ -149,35 +186,55 @@
     // ===== STATUS POLLING =====
     
     async function pollStatus() {
-        const status = await fetchStatus();
-        
-        if (status) {
-            // Store initial identifiers on first fetch
-            if (!initialCommit && status.commit) {
-                initialCommit = status.commit;
-                console.log('[VersionMonitor] Initial commit:', initialCommit.substring(0, 7));
-            }
-            if (!initialVersion && status.version) {
-                initialVersion = status.version;
-                console.log('[VersionMonitor] Initial version:', initialVersion);
-            }
+        try {
+            const status = await fetchStatus();
             
-            // Adjust polling based on deployment status
-            const deploying = isDeploying(status);
-            if (deploying !== isDeploymentMode) {
-                isDeploymentMode = deploying;
-                currentPollInterval = deploying ? config.fastPollInterval : config.pollInterval;
-                console.log(`[VersionMonitor] ${deploying ? '🚀 Deployment detected' : '✅ Normal mode'}, polling every ${currentPollInterval / 1000}s`);
-            }
-            
-            // Check for version change (only after deployment completes)
-            if (!deploying) {
-                const commitChanged = status.commit && initialCommit && status.commit !== initialCommit;
-                if (commitChanged && !versionBanner) {
-                    const displayVersion = status.version || status.commit.substring(0, 7);
-                    showVersionBanner(displayVersion);
+            if (status) {
+                // Store initial identifiers on first fetch
+                if (!initialCommit && status.commit) {
+                    initialCommit = status.commit;
+                    console.log('[VersionMonitor] Initial commit:', initialCommit.substring(0, 7));
                 }
+                if (!initialVersion && status.version) {
+                    initialVersion = status.version;
+                    console.log('[VersionMonitor] Initial version:', initialVersion);
+                }
+                
+                // Adjust polling based on deployment status
+                const deploying = isDeploying(status);
+                if (deploying !== isDeploymentMode) {
+                    isDeploymentMode = deploying;
+                    currentPollInterval = deploying ? config.fastPollInterval : config.pollInterval;
+                    console.log(`[VersionMonitor] ${deploying ? '🚀 Deployment detected' : '✅ Normal mode'}, polling every ${currentPollInterval / 1000}s`);
+                }
+                
+                // Check for version change (only after deployment completes)
+                if (!deploying) {
+                    const commitChanged = status.commit && initialCommit && status.commit !== initialCommit;
+                    if (commitChanged && !versionBanner) {
+                        const displayVersion = status.version || status.commit.substring(0, 7);
+                        showVersionBanner(displayVersion);
+                    }
+                }
+            } else {
+                // Failed to fetch - use exponential backoff
+                // Start with normal interval, but cap at 5x if we keep failing
+                const backoffMultiplier = Math.min(consecutiveFailures, 5);
+                const adjustedInterval = config.pollInterval * (1 + backoffMultiplier * 0.5);
+                currentPollInterval = Math.min(adjustedInterval, config.pollInterval * 3); // Max 3x the normal interval
+                
+                if (consecutiveFailures <= 3) {
+                    console.log(`[VersionMonitor] ⚠️ Failed to fetch status (attempt ${consecutiveFailures}), retrying in ${currentPollInterval / 1000}s`);
+                } else if (consecutiveFailures === 4) {
+                    console.log('[VersionMonitor] ⚠️ Multiple failed attempts - backing off to', `${currentPollInterval / 1000}s`);
+                }
+                // Continue retrying - never give up, never throw
             }
+        } catch (e) {
+            // Emergency catch-all - should never happen but prevents circuit breaks
+            console.error('[VersionMonitor] CRITICAL ERROR in pollStatus:', e);
+            consecutiveFailures++;
+            currentPollInterval = config.pollInterval * 2;
         }
         
         scheduleNextPoll();
@@ -228,7 +285,8 @@
                 lastKnownStatus,
                 isDeploymentMode,
                 pollingInterval: currentPollInterval / 1000 + 's',
-                bannerVisible: !!versionBanner
+                bannerVisible: !!versionBanner,
+                consecutiveFailures
             });
             return lastKnownStatus;
         },
@@ -239,7 +297,12 @@
         showBanner: (version) => {
             showVersionBanner(version || 'test-version');
         },
-        hideBanner: hideVersionBanner
+        hideBanner: hideVersionBanner,
+        reset: () => {
+            consecutiveFailures = 0;
+            currentPollInterval = config.pollInterval;
+            console.log('[VersionMonitor] Reset to normal polling');
+        }
     };
 
     console.log('[VersionMonitor] Testing API: BlazorVersionMonitor.status(), .refreshStatus(), .showBanner(), .hideBanner()');
