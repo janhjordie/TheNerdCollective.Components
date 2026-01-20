@@ -7,7 +7,7 @@
     <RootNamespace>TheNerdCollective.Blazor.VersionMonitor</RootNamespace>
     <AssemblyName>TheNerdCollective.Blazor.VersionMonitor</AssemblyName>
     <PackageId>TheNerdCollective.Blazor.VersionMonitor</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>A lightweight version monitor for Blazor Server apps. Polls a status endpoint and shows a notification banner when a new version is available. Perfect for deployment notifications.</Description>
     <PackageTags>blazor;blazor-server;version;deployment;notification;banner</PackageTags>
