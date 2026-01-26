@@ -205,6 +205,71 @@ MudSwiper is a **generic component**, meaning you specify the type of slides whe
 }
 ```
 
+### Responsive Design with Breakpoints
+
+Display different numbers of slides based on screen size:
+
+```razor
+<MudSwiper TSlide="Product" 
+           Slides="@products"
+           SlidesPerView="4"
+           SpaceBetween="20"
+           Breakpoints="@breakpoints"
+           Height="300px">
+    <SlideTemplate Context="product">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.body1">@product.Name</MudText>
+            </MudCardContent>
+        </MudCard>
+    </SlideTemplate>
+</MudSwiper>
+
+@code {
+    // Responsive breakpoints: key = breakpoint width (px), value = settings
+    private Dictionary<int, dynamic> breakpoints = new()
+    {
+        // Desktop: 4 slides per view
+        { 1024, new { slidesPerView = 4, spaceBetween = 20 } },
+        
+        // Tablet: 3 slides per view
+        { 768, new { slidesPerView = 3, spaceBetween = 15 } },
+        
+        // Small tablet: 2 slides per view
+        { 480, new { slidesPerView = 2, spaceBetween = 10 } },
+        
+        // Mobile: 1 slide per view
+        { 0, new { slidesPerView = 1, spaceBetween = 5 } }
+    };
+
+    private List<Product> products = new()
+    {
+        new() { Name = "Product 1" },
+        new() { Name = "Product 2" },
+        // ... more products
+    };
+
+    private class Product
+    {
+        public string Name { get; set; }
+    }
+}
+```
+
+**How breakpoints work:**
+- Swiper reads breakpoints from largest to smallest
+- When window width is ≥ 1024px: 4 slides per view
+- When window width is < 1024px and ≥ 768px: 3 slides per view
+- When window width is < 768px and ≥ 480px: 2 slides per view
+- When window width is < 480px: 1 slide per view (mobile)
+
+**Supported breakpoint settings:**
+- `slidesPerView` - Number of visible slides
+- `spaceBetween` - Gap between slides (pixels)
+- `loop` - Enable/disable looping
+- `autoplay` - Auto-play settings
+- Any other Swiper option that's responsive
+
 ### Programmatic Control
 
 ```razor
@@ -260,6 +325,7 @@ MudSwiper is a **generic component**, meaning you specify the type of slides whe
 | `AutoplayPauseOnHover` | `bool` | `true` | Pause autoplay on hover |
 | `Height` | `string` | `"300px"` | Container height (px, %, auto, etc.) |
 | `CssClass` | `string` | `null` | Custom CSS class for container |
+| `Breakpoints` | `Dictionary<int, dynamic>` | `null` | Responsive breakpoints (see Responsive Design section) |
 | `OnSlideChange` | `EventCallback<int>` | - | Fires when active slide changes (index) |
 | `OnReachEnd` | `EventCallback` | - | Fires when carousel reaches the end |
 | `OnReachBeginning` | `EventCallback` | - | Fires when carousel reaches the beginning |
@@ -280,30 +346,20 @@ await swiperComponent.NextSlideAsync();
 await swiperComponent.PreviousSlideAsync();
 ```
 
-## Responsive Configuration
+## Performance Tips
 
-For responsive slides per view, wrap in a responsive container:
-
-```razor
-<MudContainer MaxWidth="MaxWidth.Large">
-    <MudSwiper Slides="@items" 
-               SlidesPerView="3"
-               SpaceBetween="20"
-               Height="300px" />
-</MudContainer>
-```
-
-Or use CSS media queries:
-
-```css
-@media (max-width: 1200px) {
-    .swiper { /* Styles for tablet */ }
-}
-
-@media (max-width: 600px) {
-    .swiper { /* Styles for mobile */ }
-}
-```
+- Use `Height` to prevent layout shift
+- Keep slide templates simple for better performance
+- Consider virtualizing very large slide lists
+- Use `@key` directive for consistent rendering:
+  ```razor
+  @foreach (var slide in Slides)
+  {
+      <div class="swiper-slide" @key="slide">
+          @SlideTemplate(slide)
+      </div>
+  }
+  ```
 
 ## How It Works
 

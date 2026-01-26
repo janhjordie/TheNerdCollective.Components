@@ -125,6 +125,15 @@
     public string? CssClass { get; set; }
 
     /// <summary>
+    /// Breakpoint configuration for responsive behavior.
+    /// Key: breakpoint width in pixels (e.g., 1024, 768, 480)
+    /// Value: settings for that breakpoint (slidesPerView, spaceBetween, etc.)
+    /// Example: new() { { 1024, new { slidesPerView = 4 } }, { 768, new { slidesPerView = 3 } }, { 0, new { slidesPerView = 1 } } }
+    /// </summary>
+    [Parameter]
+    public Dictionary<int, dynamic>? Breakpoints { get; set; }
+
+    /// <summary>
     /// Called when the active slide index changes.
     /// </summary>
     [Parameter]
@@ -174,6 +183,7 @@
                             delay = AutoplayDelay,
                             pauseOnMouseEnter = AutoplayPauseOnHover
                         } : null,
+                        breakpoints = Breakpoints,
                         onSlideChange = DotNetObjectReference.Create(this),
                         onReachEnd = DotNetObjectReference.Create(this),
                         onReachBeginning = DotNetObjectReference.Create(this)
