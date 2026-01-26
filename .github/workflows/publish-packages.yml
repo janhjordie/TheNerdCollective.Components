@@ -41,7 +41,10 @@ jobs:
             ["TheNerdCollective.Blazor.VersionMonitor"]="src/TheNerdCollective.Blazor.VersionMonitor"
             ["TheNerdCollective.Helpers"]="src/TheNerdCollective.Helpers"
             ["TheNerdCollective.Integrations.Harvest"]="src/TheNerdCollective.Integrations.Harvest"
+            ["TheNerdCollective.Integrations.GitHub"]="src/TheNerdCollective.Integrations.GitHub"
+            ["TheNerdCollective.Integrations.AzurePipelines"]="src/TheNerdCollective.Integrations.AzurePipelines"
             ["TheNerdCollective.MudComponents.MudQuillEditor"]="src/TheNerdCollective.MudComponents.MudQuillEditor"
+            ["TheNerdCollective.MudComponents.MudSwiper"]="src/TheNerdCollective.MudComponents.MudSwiper"
             ["TheNerdCollective.MudComponents.HarvestTimesheet"]="src/TheNerdCollective.MudComponents.HarvestTimesheet"
           )
           

@@ -3,51 +3,195 @@
 
 <PageTitle>The Nerd Collective - Components</PageTitle>
 
-<div class="mb-6">
-    <MudText Typo="Typo.h3" GutterBottom="true">The Nerd Collective Components</MudText>
-    <MudText Typo="Typo.subtitle1">A collection of reusable Blazor components built with MudBlazor</MudText>
+<div class="mb-8">
+    <MudText Typo="Typo.h2" GutterBottom="true">The Nerd Collective Components</MudText>
+<MudText Typo="Typo.h5">Production-ready Blazor components built with MudBlazor</MudText>
 </div>
 
-<MudPaper Class="pa-6 mb-6">
-    <MudText Typo="Typo.h5" GutterBottom="true">Welcome</MudText>
-    <MudText>
-        This library provides a growing collection of production-ready Blazor components designed to work seamlessly with MudBlazor. 
-        Browse the navigation menu to explore available components and learn how to use them in your projects.
-    </MudText>
-</MudPaper>
+<MudAlert Severity="Severity.Success" Class="mb-8">
+    <MudStack Row="true" Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" />
+        <div>
+            <MudText Typo="Typo.body1">
+                <strong>Welcome to our component library!</strong> Explore a growing collection of reusable, production-ready Blazor components designed to work seamlessly with MudBlazor.
+            </MudText>
+        </div>
+    </MudStack>
+</MudAlert>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mt-8 mb-4">Available Components</MudText>
 
 <MudGrid>
-    <MudItem xs="12" sm="6">
-        <MudPaper Class="pa-6 h-100">
-            <MudText Typo="Typo.h6" GutterBottom="true">
-                <MudIcon Icon="@Icons.Material.Filled.Dashboard" class="mr-2" />
-                MudComponents
-            </MudText>
-            <MudText Class="mb-4">
-                Pre-built MudBlazor components for common use cases.
-            </MudText>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" href="/mud-quill-editor">
-                View Components
-            </MudButton>
+    <!-- MudQuillEditor Component Card -->
+    <MudItem xs="12" sm="6" md="6">
+        <MudPaper Class="pa-6 h-100" Style="border-left: 4px solid #594AE2;">
+            <MudStack Spacing="3">
+                <div>
+                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+                    <MudText Typo="Typo.h6" GutterBottom="true">MudQuillEditor</MudText>
+                    <MudText Typo="Typo.subtitle2">Rich-text Editor</MudText>
+                </div>
+                
+                <MudText Typo="Typo.body2">
+                    A powerful Blazor component wrapping Quill 2.0 with full MudBlazor integration and automatic theme support.
+                </MudText>
+                
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption">
+                        <strong>Features:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.caption">✨ Two-way data binding</MudText>
+                    <MudText Typo="Typo.caption">🎨 Dark/light theme support</MudText>
+                    <MudText Typo="Typo.caption">📏 Customizable height</MudText>
+                </MudStack>
+                
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Small" Href="/mud-quill-editor">
+                    View Demo
+                </MudButton>
+            </MudStack>
         </MudPaper>
     </MudItem>
 
-    <MudItem xs="12" sm="6">
-        <MudPaper Class="pa-6 h-100">
-            <MudText Typo="Typo.h6" GutterBottom="true">
-                <MudIcon Icon="@Icons.Material.Filled.Widgets" class="mr-2" />
-                Components
-            </MudText>
-            <MudText Class="mb-4">
-                Utility components and helpers for building better Blazor applications.
-            </MudText>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" href="/components">
-                Coming Soon
-            </MudButton>
+    <!-- MudSwiper Component Card -->
+    <MudItem xs="12" sm="6" md="6">
+        <MudPaper Class="pa-6 h-100" Style="border-left: 4px solid #FF6B6B;">
+            <MudStack Spacing="3">
+                <div>
+                    <MudIcon Icon="@Icons.Material.Filled.PhotoLibrary" Size="Size.Large" Color="Color.Error" Class="mb-2" />
+                    <MudText Typo="Typo.h6" GutterBottom="true">MudSwiper</MudText>
+                    <MudText Typo="Typo.subtitle2">Carousel Component</MudText>
+                </div>
+                
+                <MudText Typo="Typo.body2">
+                    A touch-enabled carousel component powered by Swiper.js with full MudBlazor styling and theme integration.
+                </MudText>
+                
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption">
+                        <strong>Features:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.caption">📱 Touch & responsive</MudText>
+                    <MudText Typo="Typo.caption">🎯 Multiple slides per view</MudText>
+                    <MudText Typo="Typo.caption">⏱️ Auto-play support</MudText>
+                </MudStack>
+                
+                <MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true" Size="Size.Small" Href="/mud-swiper">
+                    View Demo
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Coming Soon: Components -->
+    <MudItem xs="12" sm="6" md="6">
+        <MudPaper Class="pa-6 h-100" Style="border-left: 4px solid #CCC; opacity: 0.6;">
+            <MudStack Spacing="3">
+                <div>
+                    <MudIcon Icon="@Icons.Material.Filled.Widgets" Size="Size.Large" Color="Color.Tertiary" Class="mb-2" />
+                    <MudText Typo="Typo.h6" GutterBottom="true">More Components</MudText>
+                    <MudText Typo="Typo.subtitle2">Coming Soon</MudText>
+                </div>
+                
+                <MudText Typo="Typo.body2">
+                    Additional utility components and helpers for building better Blazor applications are in development.
+                </MudText>
+                
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption">
+                        <strong>Planned:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.caption">📋 Data Grid enhancements</MudText>
+                    <MudText Typo="Typo.caption">🎨 Theme utilities</MudText>
+                    <MudText Typo="Typo.caption">⚙️ Common helpers</MudText>
+                </MudStack>
+                
+                <MudButton Variant="Variant.Outlined" Color="Color.Tertiary" FullWidth="true" Size="Size.Small" Disabled="true">
+                    Coming Soon
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Coming Soon: Services -->
+    <MudItem xs="12" sm="6" md="6">
+        <MudPaper Class="pa-6 h-100" Style="border-left: 4px solid #CCC; opacity: 0.6;">
+            <MudStack Spacing="3">
+                <div>
+                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Color="Color.Warning" Class="mb-2" />
+                    <MudText Typo="Typo.h6" GutterBottom="true">Services & Integration</MudText>
+                    <MudText Typo="Typo.subtitle2">Coming Soon</MudText>
+                </div>
+                
+                <MudText Typo="Typo.body2">
+                    Explore service abstractions, Azure integration, and external API clients from our service packages.
+                </MudText>
+                
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption">
+                        <strong>Includes:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.caption">☁️ Azure Blob Storage</MudText>
+                    <MudText Typo="Typo.caption">🔗 External API clients</MudText>
+                    <MudText Typo="Typo.caption">🛠️ DI extensions</MudText>
+                </MudStack>
+                
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning" FullWidth="true" Size="Size.Small" Disabled="true">
+                    Coming Soon
+                </MudButton>
+            </MudStack>
         </MudPaper>
     </MudItem>
 </MudGrid>
 
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mt-12 mb-4">About The Nerd Collective</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-6">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">Open Source Components</MudText>
+                <MudText Typo="Typo.body2">
+                    All components in this library are production-ready and actively used in our customer applications. 
+                    We believe in sharing quality code with the community.
+                </MudText>
+                <MudText Typo="Typo.body2">
+                    <strong>Licensed under Apache 2.0</strong> - free to use in commercial projects.
+                </MudText>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-6">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">Get Started</MudText>
+                <MudText Typo="Typo.body2">
+                    Install components from NuGet and check out our documentation to get started quickly.
+                </MudText>
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.Link"
+                               Href="https://github.com/janhjordie/TheNerdCollective.Components" 
+                               Target="_blank">
+                        GitHub
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Storage"
+                               Href="https://www.nuget.org/packages?q=TheNerdCollective" 
+                               Target="_blank">
+                        NuGet
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<style>
+</style>
+
+@code {
+}
 <div class="mt-6">
     <MudText Typo="Typo.h5" GutterBottom="true">Company Info</MudText>
     <MudPaper Class="pa-4">

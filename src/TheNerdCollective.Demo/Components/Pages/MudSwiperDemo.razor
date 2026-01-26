@@ -1,0 +1,290 @@
+@page "/mud-swiper"
+@using TheNerdCollective.MudComponents.MudSwiper
+@rendermode InteractiveServer
+
+<PageTitle>MudSwiper - The Nerd Collective</PageTitle>
+
+<div class="mb-6">
+    <MudText Typo="Typo.h3" GutterBottom="true">MudSwiper</MudText>
+    <MudText Typo="Typo.subtitle1">A Blazor carousel component wrapping Swiper.js with MudBlazor styling</MudText>
+</div>
+
+<MudAlert Severity="Severity.Info" Class="mb-6">
+    <MudText Typo="Typo.body2">
+        <strong>Built by <MudLink Href="https://www.thenerdcollective.dk/" Target="_blank" Color="Color.Info">The Nerd Collective Aps</MudLink></strong>
+        <br />
+        Developed by <MudLink Href="https://github.com/janhjordie" Target="_blank" Color="Color.Info">janhjordie</MudLink>
+        <br />
+        MudSwiper is a production-ready carousel component that combines the power of 
+        <MudLink Href="https://swiperjs.com/" Target="_blank" Color="Color.Info">Swiper.js</MudLink> with MudBlazor's design system.
+    </MudText>
+</MudAlert>
+
+<MudPaper Class="pa-4 mb-6">
+    <MudText Typo="Typo.body1" Class="mb-3">
+        MudSwiper is a Blazor component that provides a powerful carousel/slider powered by <MudLink Href="https://swiperjs.com/" Target="_blank">Swiper.js</MudLink>. 
+        It integrates seamlessly with <MudLink Href="https://www.mudblazor.com/" Target="_blank">MudBlazor</MudLink> for styling and theming.
+    </MudText>
+    <MudText Typo="Typo.body2">
+        <strong>Features:</strong>
+    </MudText>
+    <ul>
+        <li>📱 Touch-enabled carousel for mobile and desktop</li>
+        <li>🎯 Multiple slides per view with responsive support</li>
+        <li>🎨 Automatic MudBlazor theme integration</li>
+        <li>⚡ Auto-loads Swiper from CDN</li>
+        <li>🔄 Pagination and navigation controls</li>
+        <li>⏱️ Auto-play with customizable delays</li>
+        <li>⌨️ Keyboard and mouse wheel navigation</li>
+        <li>📡 Event callbacks for slide changes</li>
+    </ul>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6 mb-3">Demo 1: Slides Per View (Basic Example)</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Display multiple slides at once with pagination dots. This is the classic carousel demo from Swiper documentation.
+</MudText>
+
+<MudPaper Class="pa-6 mb-8">
+    <MudSwiper Slides="@slidesPerViewItems" 
+               SlidesPerView="3"
+               SpaceBetween="30"
+               ShowPagination="true"
+               Height="250px">
+        <SlideTemplate Context="item">
+            <div style="background: #444; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; border-radius: 4px;">
+                @item
+            </div>
+        </SlideTemplate>
+    </MudSwiper>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6 mb-3">Demo 2: Image Gallery with Navigation</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Single-item carousel with previous/next navigation buttons.
+</MudText>
+
+<MudPaper Class="pa-6 mb-8">
+    <MudSwiper Slides="@galleryImages"
+               SlidesPerView="1"
+               ShowNavigation="true"
+               ShowPagination="true"
+               Height="350px">
+        <SlideTemplate Context="image">
+            <img src="@image" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" alt="Gallery image" />
+        </SlideTemplate>
+    </MudSwiper>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6 mb-3">Demo 3: Auto-Play with Event Tracking</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Carousel that auto-advances every 3 seconds with slide change tracking.
+</MudText>
+
+<MudPaper Class="pa-6 mb-8">
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudSwiper @ref="autoplaySwiper"
+                       Slides="@productsAsObjects"
+                       SlidesPerView="1"
+                       AutoplayDelay="3000"
+                       AutoplayPauseOnHover="true"
+                       OnSlideChange="HandleSlideChange"
+                       Height="300px">
+                <SlideTemplate Context="item">
+                    @{
+                        var product = item as Product;
+                        if (product != null)
+                        {
+                            <MudPaper Class="pa-6 h-100" Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: center; flex-direction: column; border-radius: 4px;">
+                                <MudIcon Icon="@product.Icon" Style="font-size: 48px; margin-bottom: 16px;" />
+                                <MudText Typo="Typo.h6" Align="Align.Center">@product.Name</MudText>
+                                <MudText Typo="Typo.body2" Align="Align.Center" Class="mt-2">@product.Description</MudText>
+                            </MudPaper>
+                        }
+                    }
+                </SlideTemplate>
+            </MudSwiper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" GutterBottom="true">Current Slide</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Primary" GutterBottom="true">@(currentSlideIndex + 1) of @products.Count</MudText>
+                <MudText Typo="Typo.body2" GutterBottom="true">
+                    <strong>@(currentSlideIndex < products.Count ? products[currentSlideIndex].Name : "Loading...")</strong>
+                </MudText>
+                <MudText Typo="Typo.body2">
+                    @(currentSlideIndex < products.Count ? products[currentSlideIndex].Description : "")
+                </MudText>
+                <MudDivider Class="my-4" />
+                <MudStack Spacing="2">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" OnClick="GoToPrevious">Previous</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" OnClick="GoToNext">Next</MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6 mb-3">Demo 4: Looping Carousel</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Carousel that loops back to the beginning when reaching the end.
+</MudText>
+
+<MudPaper Class="pa-6 mb-8">
+    <MudSwiper Slides="@loopItems"
+               SlidesPerView="2"
+               SpaceBetween="20"
+               Loop="true"
+               ShowNavigation="true"
+               ShowPagination="true"
+               Height="200px">
+        <SlideTemplate Context="item">
+            <MudPaper Class="pa-4 h-100" Elevation="2">
+                <MudText Typo="Typo.body1" Align="Align.Center">@item</MudText>
+            </MudPaper>
+        </SlideTemplate>
+    </MudSwiper>
+</MudPaper>
+
+<MudText Typo="Typo.h5" GutterBottom="true" Class="mt-6 mb-3">API Reference</MudText>
+<MudPaper Class="pa-4">
+    <MudText Typo="Typo.subtitle2" GutterBottom="true">Key Parameters</MudText>
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead>
+            <tr>
+                <th>Parameter</th>
+                <th>Type</th>
+                <th>Default</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>Slides</code></td>
+                <td>IEnumerable&lt;object&gt;</td>
+                <td>-</td>
+                <td>Collection of slides to display</td>
+            </tr>
+            <tr>
+                <td><code>SlidesPerView</code></td>
+                <td>int</td>
+                <td>1</td>
+                <td>Number of slides visible at once</td>
+            </tr>
+            <tr>
+                <td><code>SpaceBetween</code></td>
+                <td>int</td>
+                <td>10</td>
+                <td>Spacing between slides in pixels</td>
+            </tr>
+            <tr>
+                <td><code>ShowPagination</code></td>
+                <td>bool</td>
+                <td>true</td>
+                <td>Show pagination dots</td>
+            </tr>
+            <tr>
+                <td><code>ShowNavigation</code></td>
+                <td>bool</td>
+                <td>false</td>
+                <td>Show next/previous buttons</td>
+            </tr>
+            <tr>
+                <td><code>Loop</code></td>
+                <td>bool</td>
+                <td>false</td>
+                <td>Loop slides after last one</td>
+            </tr>
+            <tr>
+                <td><code>AutoplayDelay</code></td>
+                <td>int</td>
+                <td>0</td>
+                <td>Auto-advance delay in ms (0 = disabled)</td>
+            </tr>
+            <tr>
+                <td><code>Height</code></td>
+                <td>string</td>
+                <td>300px</td>
+                <td>Container height</td>
+            </tr>
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+<div class="mt-6 mb-8">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">← Back to Home</MudButton>
+</div>
+
+@code {
+    private MudSwiper? autoplaySwiper;
+    private int currentSlideIndex = 0;
+
+    // Convert products list to object enumerable for MudSwiper component
+    private IEnumerable<object> productsAsObjects => products.Cast<object>();
+
+    private List<string> slidesPerViewItems = Enumerable.Range(1, 9)
+        .Select(x => $"Slide {x}")
+        .ToList();
+
+    private List<string> galleryImages = new()
+    {
+        "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80",
+        "https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=800&q=80",
+        "https://images.unsplash.com/photo-1505738927beb-be3e7a157e92?w=800&q=80",
+        "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=800&q=80",
+    };
+
+    private List<Product> products = new()
+    {
+        new() { 
+            Name = "Rich Text Editor", 
+            Description = "MudQuillEditor - powerful rich-text editing",
+            Icon = Icons.Material.Filled.Edit
+        },
+        new() { 
+            Name = "Carousel Component", 
+            Description = "MudSwiper - touch-enabled carousel",
+            Icon = Icons.Material.Filled.PhotoLibrary
+        },
+        new() { 
+            Name = "Utility Helpers", 
+            Description = "File, Date, CSV utilities",
+            Icon = Icons.Material.Filled.Build
+        },
+        new() { 
+            Name = "Service Abstractions", 
+            Description = "Azure Blob Storage & DI patterns",
+            Icon = Icons.Material.Filled.CloudUpload
+        },
+    };
+
+    private List<string> loopItems = Enumerable.Range(1, 6)
+        .Select(x => $"Item {x}")
+        .ToList();
+
+    private Task HandleSlideChange(int index)
+    {
+        currentSlideIndex = index;
+        return Task.CompletedTask;
+    }
+
+    private async Task GoToNext()
+    {
+        if (autoplaySwiper != null)
+            await autoplaySwiper.NextSlideAsync();
+    }
+
+    private async Task GoToPrevious()
+    {
+        if (autoplaySwiper != null)
+            await autoplaySwiper.PreviousSlideAsync();
+    }
+
+    private class Product
+    {
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Icon { get; set; } = "";
+    }
+}

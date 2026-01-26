@@ -52,7 +52,14 @@
     {
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("mudQuillEditor.setDarkMode", _isDarkMode);
+            try
+            {
+                await JS.InvokeVoidAsync("mudQuillEditor.setDarkMode", _isDarkMode);
+            }
+            catch
+            {
+                // MudQuillEditor module not loaded on this page, that's OK
+            }
         }
     }
 
@@ -64,7 +71,14 @@
     private async void DarkModeToggle()
     {
         _isDarkMode = !_isDarkMode;
-        await JS.InvokeVoidAsync("mudQuillEditor.setDarkMode", _isDarkMode);
+        try
+        {
+            await JS.InvokeVoidAsync("mudQuillEditor.setDarkMode", _isDarkMode);
+        }
+        catch
+        {
+            // MudQuillEditor module not loaded on this page, that's OK
+        }
         StateHasChanged();
     }
 

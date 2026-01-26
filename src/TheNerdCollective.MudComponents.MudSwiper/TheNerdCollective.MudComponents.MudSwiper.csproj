@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageId>TheNerdCollective.MudComponents.MudSwiper</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>The Nerd Collective</Authors>
+    <Description>MudBlazor-compatible Blazor carousel component wrapper for Swiper - a powerful touch slider library.</Description>
+    <PackageTags>mudblazor;blazor;swiper;carousel;slider;touch</PackageTags>
+    <License>Apache-2.0</License>
+    <LicenseExpression>Apache-2.0</LicenseExpression>
+    <RepositoryUrl>https://github.com/janhjordie/TheNerdCollective.Components</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" Version="8.15.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

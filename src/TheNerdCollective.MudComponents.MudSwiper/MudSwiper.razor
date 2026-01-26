@@ -1,0 +1,277 @@
+@namespace TheNerdCollective.MudComponents.MudSwiper
+@using MudBlazor
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="mud-swiper-container" style="@ContainerStyle">
+    <div class="swiper mud-swiper" @ref="SwiperElement">
+        <div class="swiper-wrapper">
+            @foreach (var slide in Slides)
+            {
+                <div class="swiper-slide mud-swiper-slide">
+                    @if (SlideTemplate != null)
+                    {
+                        @SlideTemplate(slide)
+                    }
+                    else
+                    {
+                        @slide.ToString()
+                    }
+                </div>
+            }
+        </div>
+
+        @if (ShowPagination)
+        {
+            <div class="swiper-pagination mud-swiper-pagination"></div>
+        }
+
+        @if (ShowNavigation)
+        {
+            <div class="swiper-button-prev mud-swiper-button-prev"></div>
+            <div class="swiper-button-next mud-swiper-button-next"></div>
+        }
+    </div>
+</div>
+
+@code {
+    private ElementReference SwiperElement;
+    private IJSObjectReference? module;
+    private IJSObjectReference? swiperInstance;
+
+    /// <summary>
+    /// The slides to display in the carousel.
+    /// </summary>
+    [Parameter]
+    public IEnumerable<object>? Slides { get; set; } = new List<object>();
+
+    /// <summary>
+    /// Template for rendering each slide. If not provided, ToString() is used.
+    /// </summary>
+    [Parameter]
+    public RenderFragment<object>? SlideTemplate { get; set; }
+
+    /// <summary>
+    /// Number of slides to display per view.
+    /// </summary>
+    [Parameter]
+    public int SlidesPerView { get; set; } = 1;
+
+    /// <summary>
+    /// Space between slides in pixels.
+    /// </summary>
+    [Parameter]
+    public int SpaceBetween { get; set; } = 10;
+
+    /// <summary>
+    /// Whether to show pagination dots.
+    /// </summary>
+    [Parameter]
+    public bool ShowPagination { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show next/previous navigation buttons.
+    /// </summary>
+    [Parameter]
+    public bool ShowNavigation { get; set; } = false;
+
+    /// <summary>
+    /// Whether to loop slides (return to first slide after last).
+    /// </summary>
+    [Parameter]
+    public bool Loop { get; set; } = false;
+
+    /// <summary>
+    /// Whether pagination is clickable.
+    /// </summary>
+    [Parameter]
+    public bool ClickablePercentage { get; set; } = true;
+
+    /// <summary>
+    /// Enable keyboard navigation.
+    /// </summary>
+    [Parameter]
+    public bool KeyboardControl { get; set; } = true;
+
+    /// <summary>
+    /// Enable mouse wheel control.
+    /// </summary>
+    [Parameter]
+    public bool MouseWheelControl { get; set; } = false;
+
+    /// <summary>
+    /// Auto-advance to next slide after X milliseconds (0 = disabled).
+    /// </summary>
+    [Parameter]
+    public int AutoplayDelay { get; set; } = 0;
+
+    /// <summary>
+    /// Pause autoplay on mouse hover.
+    /// </summary>
+    [Parameter]
+    public bool AutoplayPauseOnHover { get; set; } = true;
+
+    /// <summary>
+    /// Height of the carousel container. Can be pixels, percentage, auto, etc.
+    /// </summary>
+    [Parameter]
+    public string? Height { get; set; } = "300px";
+
+    /// <summary>
+    /// Custom CSS class to apply to the container.
+    /// </summary>
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    /// <summary>
+    /// Called when the active slide index changes.
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnSlideChange { get; set; }
+
+    /// <summary>
+    /// Called when the carousel reaches the end.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnReachEnd { get; set; }
+
+    /// <summary>
+    /// Called when the carousel reaches the beginning.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnReachBeginning { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                module = await JS.InvokeAsync<IJSObjectReference>(
+                    "import", "./_content/TheNerdCollective.MudComponents.MudSwiper/js/mudswiper.js");
+
+                swiperInstance = await module.InvokeAsync<IJSObjectReference>(
+                    "initSwiper", SwiperElement, new
+                    {
+                        slidesPerView = SlidesPerView,
+                        spaceBetween = SpaceBetween,
+                        loop = Loop,
+                        keyboard = KeyboardControl ? new { enabled = true } : null,
+                        mousewheel = MouseWheelControl ? new { forceToAxis = true } : null,
+                        pagination = ShowPagination ? new
+                        {
+                            el = ".swiper-pagination",
+                            clickable = ClickablePercentage
+                        } : null,
+                        navigation = ShowNavigation ? new
+                        {
+                            nextEl = ".swiper-button-next",
+                            prevEl = ".swiper-button-prev"
+                        } : null,
+                        autoplay = AutoplayDelay > 0 ? new
+                        {
+                            delay = AutoplayDelay,
+                            pauseOnMouseEnter = AutoplayPauseOnHover
+                        } : null,
+                        onSlideChange = DotNetObjectReference.Create(this),
+                        onReachEnd = DotNetObjectReference.Create(this),
+                        onReachBeginning = DotNetObjectReference.Create(this)
+                    });
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error initializing Swiper: {ex.Message}");
+            }
+        }
+    }
+
+    private string ContainerStyle
+    {
+        get
+        {
+            var styles = new List<string>();
+            if (!string.IsNullOrEmpty(Height))
+            {
+                styles.Add($"height: {Height}");
+            }
+            styles.Add("width: 100%");
+            return string.Join("; ", styles);
+        }
+    }
+
+    /// <summary>
+    /// Get the current slide index.
+    /// </summary>
+    public async Task<int> GetCurrentSlideAsync()
+    {
+        if (swiperInstance != null)
+        {
+            return await swiperInstance.InvokeAsync<int>("getActiveIndex");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Navigate to a specific slide.
+    /// </summary>
+    public async Task GoToSlideAsync(int index)
+    {
+        if (swiperInstance != null)
+        {
+            await swiperInstance.InvokeAsync<object>("goToSlide", index);
+        }
+    }
+
+    /// <summary>
+    /// Go to the next slide.
+    /// </summary>
+    public async Task NextSlideAsync()
+    {
+        if (swiperInstance != null)
+        {
+            await swiperInstance.InvokeAsync<object>("slideNext");
+        }
+    }
+
+    /// <summary>
+    /// Go to the previous slide.
+    /// </summary>
+    public async Task PreviousSlideAsync()
+    {
+        if (swiperInstance != null)
+        {
+            await swiperInstance.InvokeAsync<object>("slidePrev");
+        }
+    }
+
+    [JSInvokable]
+    public async Task HandleSlideChange(int activeIndex)
+    {
+        await OnSlideChange.InvokeAsync(activeIndex);
+    }
+
+    [JSInvokable]
+    public async Task HandleReachEnd()
+    {
+        await OnReachEnd.InvokeAsync();
+    }
+
+    [JSInvokable]
+    public async Task HandleReachBeginning()
+    {
+        await OnReachBeginning.InvokeAsync();
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (module is not null)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("destroySwiper", swiperInstance);
+            }
+            catch { }
+            await module.DisposeAsync();
+        }
+    }
+}
