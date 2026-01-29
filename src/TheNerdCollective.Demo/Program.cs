@@ -1,12 +1,16 @@
 using MudBlazor.Services;
 using TheNerdCollective.Demo.Components;
 using TheNerdCollective.Services.BlazorServer;
+using TheNerdCollective.Blazor.SessionMonitor;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
+
+// Add session monitoring
+builder.Services.AddSessionMonitoring();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -39,6 +43,8 @@ app.MapBlazorReconnectionStatusEndpoint("/reconnection-status.json", async ctx =
         Version = version
     });
 });
+// Map session monitoring endpoints
+app.MapSessionMonitoringEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

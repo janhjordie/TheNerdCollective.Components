@@ -12,5 +12,6 @@
     <ProjectReference Include="..\TheNerdCollective.Components\TheNerdCollective.Components.csproj" />
     <ProjectReference Include="..\TheNerdCollective.MudComponents.MudSwiper\TheNerdCollective.MudComponents.MudSwiper.csproj" />
     <ProjectReference Include="..\TheNerdCollective.Services.BlazorServer\TheNerdCollective.Services.BlazorServer.csproj" />
+    <ProjectReference Include="..\TheNerdCollective.Blazor.SessionMonitor\TheNerdCollective.Blazor.SessionMonitor.csproj" />
   </ItemGroup>
 </Project>
