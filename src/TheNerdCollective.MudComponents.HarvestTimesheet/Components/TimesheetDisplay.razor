@@ -118,7 +118,7 @@
                         <MudTd>@context.Notes</MudTd>
                         <MudTd Style="text-align: right;">
                             <MudText Typo="Typo.body2" Color="Color.Primary">
-                                <strong>@context.RoundedHours.ToString("F2")</strong>
+                                <strong>@FormatHours(context.RoundedHours)</strong>
                             </MudText>
                         </MudTd>
                     </RowTemplate>
@@ -130,19 +130,19 @@
                         <MudItem xs="12" sm="6" md="3">
                             <MudText Typo="Typo.subtitle2">Billable Hours</MudText>
                             <MudText Typo="Typo.h5" Color="Color.Success">
-                                <strong>@GetFilteredBillableHours().ToString("F2")</strong>
+                                <strong>@FormatHours(GetFilteredBillableHours())</strong>
                             </MudText>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="3">
                             <MudText Typo="Typo.subtitle2">Total Hours</MudText>
                             <MudText Typo="Typo.h5" Color="Color.Primary">
-                                <strong>@GetFilteredTotalHours().ToString("F2")</strong>
+                                <strong>@FormatHours(GetFilteredTotalHours())</strong>
                             </MudText>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="3">
                             <MudText Typo="Typo.subtitle2">Hours (U/B)</MudText>
                             <MudText Typo="Typo.h5" Color="Color.Warning">
-                                <strong>@GetFilteredUnbilledHours().ToString("F2")</strong>
+                                <strong>@FormatHours(GetFilteredUnbilledHours())</strong>
                             </MudText>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="3">

@@ -176,6 +176,17 @@ public partial class TimesheetDisplay : ComponentBase
         };
     }
 
+    /// <summary>
+    /// Formats decimal hours to "Xh Ymin" format (e.g., 36.75 → "36h 45min")
+    /// </summary>
+    private string FormatHours(decimal hours)
+    {
+        var totalMinutes = (int)(hours * 60);
+        var h = totalMinutes / 60;
+        var min = totalMinutes % 60;
+        return $"{h}h {min}min";
+    }
+
     private static bool IsTrelloExternal(TimesheetEntry entry)
     {
         return (entry.ExternalReferenceService?.IndexOf("trello", StringComparison.OrdinalIgnoreCase) ?? -1) >= 0;
