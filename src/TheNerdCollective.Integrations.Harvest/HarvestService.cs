@@ -53,7 +53,7 @@ public class HarvestService
                 allEntries.AddRange(entries);
             }
 
-            return allEntries.OrderBy(e => e.SpentDate).ToList();
+            return allEntries.OrderBy(e => e.SpentDate).ThenBy(e => e.CreatedAt).ToList();
         }
         catch
         {
