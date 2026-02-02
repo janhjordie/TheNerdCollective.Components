@@ -186,7 +186,7 @@ public partial class TimesheetDisplay : ComponentBase
     private decimal RoundHoursToInterval(decimal hours)
     {
         var minutes = hours * 60;
-        var roundedMinutes = Math.Ceiling(minutes / MinutesRoundInterval) * MinutesRoundInterval;
+        var roundedMinutes = Math.Floor(minutes / MinutesRoundInterval) * MinutesRoundInterval;
         return roundedMinutes / 60;
     }
 
