@@ -56,13 +56,6 @@ public partial class TimesheetDisplay : ComponentBase
     [Parameter]
     public bool ShowDebugPanel { get; set; } = false;
 
-    /// <summary>
-    /// Gets or sets the minute interval to round hours up to.
-    /// Default is 15 minutes.
-    /// </summary>
-    [Parameter]
-    public int MinutesRoundInterval { get; set; } = 15;
-
     protected override async Task OnInitializedAsync()
     {
         var now = InitialDate ?? DateTime.Now;
@@ -153,11 +146,11 @@ public partial class TimesheetDisplay : ComponentBase
         }
     }
 
-    private decimal TotalHours => RoundHoursToInterval(Timesheets.Sum(t => t.Hours));
+    private decimal TotalHours => Timesheets.Sum(t => t.RoundedHours);
 
-    private decimal UnbilledHours => RoundHoursToInterval(Timesheets
+    private decimal UnbilledHours => Timesheets
         .Where(t => t.TaskName?.Contains(UnbilledKeyword) ?? false)
-        .Sum(t => t.Hours));
+        .Sum(t => t.RoundedHours);
 
     private decimal BillableHours => TotalHours - UnbilledHours;
 
@@ -165,11 +158,11 @@ public partial class TimesheetDisplay : ComponentBase
         .Where(t => _selectedProjects.Contains(t.ProjectName ?? string.Empty))
         .ToList();
 
-    private decimal GetFilteredTotalHours() => RoundHoursToInterval(FilteredTimesheets.Sum(t => t.Hours));
+    private decimal GetFilteredTotalHours() => FilteredTimesheets.Sum(t => t.RoundedHours);
 
-    private decimal GetFilteredUnbilledHours() => RoundHoursToInterval(FilteredTimesheets
+    private decimal GetFilteredUnbilledHours() => FilteredTimesheets
         .Where(t => t.TaskName?.Contains(UnbilledKeyword) ?? false)
-        .Sum(t => t.Hours));
+        .Sum(t => t.RoundedHours);
 
     private decimal GetFilteredBillableHours() => GetFilteredTotalHours() - GetFilteredUnbilledHours();
 
@@ -181,13 +174,6 @@ public partial class TimesheetDisplay : ComponentBase
             1 => selected[0],
             _ => $"{selected.Count} projects selected"
         };
-    }
-
-    private decimal RoundHoursToInterval(decimal hours)
-    {
-        var minutes = hours * 60;
-        var roundedMinutes = Math.Round(minutes / MinutesRoundInterval) * MinutesRoundInterval;
-        return roundedMinutes / 60;
     }
 
     private static bool IsTrelloExternal(TimesheetEntry entry)
