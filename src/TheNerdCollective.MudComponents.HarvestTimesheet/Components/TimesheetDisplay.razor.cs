@@ -105,7 +105,7 @@ public partial class TimesheetDisplay : ComponentBase
             var lastDay = firstDay.AddMonths(1).AddDays(-1);
 
             Timesheets = await HarvestService.GetTimesheetEntriesAsync(firstDay, lastDay);
-            
+
             // Extract unique projects and select all by default
             AvailableProjects = Timesheets
                 .Select(t => t.ProjectName)
@@ -113,7 +113,7 @@ public partial class TimesheetDisplay : ComponentBase
                 .Distinct()
                 .OrderBy(p => p)
                 .ToList();
-            
+
             // Select all projects by default
             _selectedProjects = new List<string>(AvailableProjects);
         }
