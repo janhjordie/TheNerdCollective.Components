@@ -84,12 +84,41 @@ Improve code quality, maintainability, and developer experience. Plan for next s
   - **Verification**: All 4 packages compile with 0 warnings, 0 errors
   - **Effort**: 1.5 hours ✅
 
-- [ ] **#5-REC** Add API documentation to integration services
-  - Files: GitHubService.cs, HarvestService.cs, AzurePipelinesService.cs
-  - Action: Add XML `/// <summary>`, `/// <param>`, `/// <returns>`, `/// <exception>`
-  - Add: Code examples in service READMEs
-  - Estimated: **2 hours**
-  - Status: Ready to implement
+- [x] **#5-REC** Add API documentation to integration services ✅ COMPLETED
+  - **Completed**: 2026-02-16
+  - **Files Updated**:
+    - ✅ GitHubService.cs (8 public methods documented)
+    - ✅ HarvestService.cs (2 public methods documented)
+    - ✅ AzurePipelinesService.cs (7 public methods documented)
+  - **Documentation Added**:
+    - ✅ Detailed `<param>` descriptions with constraints and valid values
+    - ✅ Clear `<returns>` documentation with type references
+    - ✅ `<remarks>` sections with Polly retry policy notes
+    - ✅ Cross-references to related methods for discoverability
+    - ✅ Official API documentation links for each method
+    - ✅ Parameter validation guidance and best practices
+  - **GitHub Integration (8 methods)**:
+    - GetLatestWorkflowRunsAsync: Parameter constraints, API reference, retry policy notes
+    - GetWorkflowRunsAsync: Detailed filtering options, branch behavior, sort specifications
+    - GetWorkflowRunAsync: Run ID retrieval, cross-reference to listing methods
+    - CancelWorkflowRunAsync: Cancellation behavior, state transitions
+    - RerunWorkflowAsync: Rerun mechanics and related method comparisons
+    - RerunFailedJobsAsync: Partial retry guidance, parameter specifications
+    - DeleteWorkflowRunAsync: Deletion constraints and effects
+    - GetWorkflowRunAttemptsAsync: Attempt tracking, rerun relationship
+  - **Harvest Integration (2 methods)**:
+    - GetTimesheetEntriesAsync: Date range handling, project aggregation, defaults
+    - GetProjectsAsync: Project discovery, pagination, relationship to timesheet queries
+  - **Azure Pipelines Integration (7 methods)**:
+    - GetLatestPipelineRunsAsync: Filtering by status/result, pagination defaults
+    - GetPipelineRunsAsync: Advanced filtering (pipeline ID, branch, sort order)
+    - GetPipelineRunAsync: Detailed run retrieval, state tracking
+    - QueuePipelineRunAsync: Branch targeting, variable overrides, async cancellation
+    - CancelPipelineRunAsync: Cancellation state transitions, async behavior
+    - GetPipelinesAsync: Pipeline discovery, list vs. detail distinction
+    - GetPipelineAsync: Detailed pipeline metadata, configuration access
+  - **Verification**: All 15 packages compile with 0 warnings, 0 errors
+  - **Effort**: 1.5 hours ✅
 
 - [ ] **#6-REC** Standardize DTOs and model classes
   - Files: All model files in integration packages
@@ -288,10 +317,10 @@ Progress: 1/3 items ✅
 
 **Phase 2 - RECOMMENDED** (Target: Next Sprint)
 ```
-Progress: 1/4 items ✅
+Progress: 2/4 items ✅
 
 ☑ #4-REC  Consolidate service registration  ✅
-☐ #5-REC  Add API documentation
+☑ #5-REC  Add API documentation  ✅
 ☐ #6-REC  Standardize DTOs
 ☐ #7-REC  Unified logging
 ```
