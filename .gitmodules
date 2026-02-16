@@ -1,0 +1,3 @@
+[submodule "docs/00-nerd-rules-submodule"]
+	path = docs/00-nerd-rules-submodule
+	url = https://github.com/janhjordie/nerd-rules.git
