@@ -1,6 +1,7 @@
 # Build directories
 bin/
 obj/
+nupkg/
 
 # Visual Studio
 .vs/
