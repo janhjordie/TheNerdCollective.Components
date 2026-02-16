@@ -32,6 +32,49 @@ dotnet pack src/TheNerdCollective.Services -c Release
 
 ---
 
+## 🚀 TRIGGER: Update NuGet Package Versions
+
+**When you've made changes to packages and need to publish them:**
+
+1. **Determine which packages changed** (e.g., added Polly, docs, fixes)
+2. **Check current versions**: `grep -r "<Version>" src/*/` to see all package versions
+3. **Decide semantic version**: 
+   - MAJOR = Breaking changes (API removed/changed)
+   - MINOR = New features, non-breaking (Polly policies, new methods)
+   - PATCH = Bug fixes, documentation only
+4. **Bump versions in `.csproj` files**: Update `<Version>X.Y.Z</Version>` tag for each affected package
+5. **Single commit with all bumps**: 
+   ```bash
+   git add -A
+   git commit -m "chore: bump packages to X.Y.Z
+   
+   Changes:
+   - Package1: old → new
+   - Package2: old → new
+   
+   Reasons: ✅ Feature description"
+   ```
+6. **Push to main**: `git push origin main`
+7. ✅ **Done!** GitHub Actions automatically publishes to NuGet within minutes
+
+**Example from today:**
+```
+chore: bump integration packages to 1.1.0
+- TheNerdCollective.Integrations.GitHub: 1.0.1 → 1.1.0
+- TheNerdCollective.Integrations.Harvest: 1.0.20 → 1.1.0
+- TheNerdCollective.Integrations.AzurePipelines: 1.0.1 → 1.1.0
+
+Reasons:
+✅ #2-CR: Polly retry policies with exponential backoff
+✅ #5-REC: Comprehensive XML API documentation
+```
+
+⚠️ **IMPORTANT**: Always `git push` to trigger the GitHub Actions workflow. **Local version bumps alone do NOT publish to NuGet.**
+
+For detailed version bumping strategy, see **[Version Bumping Strategy](#version-bumping-strategy-semantic-versioning)** below.
+
+---
+
 ## Critical: NuGet Publishing Workflow
 
 **All publishing MUST use Trusted Publishing (OIDC) via GitHub Actions—NO manual API keys.**
