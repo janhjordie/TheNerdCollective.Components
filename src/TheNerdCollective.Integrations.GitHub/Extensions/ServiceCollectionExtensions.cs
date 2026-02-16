@@ -4,46 +4,46 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace TheNerdCollective.Integrations.Harvest.Extensions;
+namespace TheNerdCollective.Integrations.GitHub.Extensions;
 
 /// <summary>
-/// Extension methods for registering Harvest API integration services.
+/// Extension methods for registering GitHub API integration services.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds Harvest API integration services to the dependency injection container.
+    /// Adds GitHub API integration services to the dependency injection container.
     /// </summary>
     /// <param name="services">The service collection to add services to.</param>
-    /// <param name="configuration">The application configuration containing Harvest settings.</param>
+    /// <param name="configuration">The application configuration containing GitHub settings.</param>
     /// <returns>The service collection for method chaining.</returns>
     /// <remarks>
     /// Configure in appsettings.json:
     /// <code>
     /// {
-    ///   "Harvest": {
-    ///     "ApiToken": "your_api_token",
-    ///     "AccountId": "your_account_id",
-    ///     "ProjectIds": [123, 456]
+    ///   "GitHub": {
+    ///     "Token": "your_personal_access_token",
+    ///     "Owner": "repository_owner",
+    ///     "Repository": "repository_name"
     ///   }
     /// }
     /// </code>
     /// 
     /// Usage in Program.cs:
     /// <code>
-    /// services.AddHarvestIntegration(configuration);
+    /// services.AddGitHubIntegration(configuration);
     /// </code>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when services or configuration is null.</exception>
-    public static IServiceCollection AddHarvestIntegration(
+    public static IServiceCollection AddGitHubIntegration(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        services.Configure<HarvestOptions>(configuration.GetSection("Harvest"));
-        services.AddHttpClient<HarvestService>();
+        services.Configure<GitHubOptions>(configuration.GetSection("GitHub"));
+        services.AddHttpClient<GitHubService>();
 
         return services;
     }
