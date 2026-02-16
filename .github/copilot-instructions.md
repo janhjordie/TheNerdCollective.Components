@@ -2,12 +2,12 @@
 
 ## Project Overview
 
-**TheNerdCollective.Components** is a .NET 10+ monorepo containing **6 independent NuGet packages** organized by domain:
+**TheNerdCollective.Components** is a .NET 10+ monorepo containing **15+ independent NuGet packages** organized by domain:
 
-- **UI/Component Packages**: MudQuillEditor (rich-text editor), MudComponents base
+- **UI/Component Packages**: MudQuillEditor (rich-text editor), MudSwiper (carousel), HarvestTimesheet, SessionMonitor (session monitoring UI), MudComponents base
 - **Infrastructure Packages**: Services (Azure Blob, DI extensions), Helpers (utility methods)
 - **Integration Packages**: Harvest (timesheet API), GitHub (workflow management), AzurePipelines (pipeline management)
-- **Blazor Utilities**: Reconnect (circuit reconnection UI), VersionMonitor (update detection), BlazorServerCircuitHandler (deprecated)
+- **Blazor Utilities**: Reconnect (circuit reconnection UI), VersionMonitor (update detection), SessionMonitor (session tracking service), BlazorServerCircuitHandler (deprecated)
 
 **Key Architecture Pattern**: Each package is independently versioned and published to NuGet. Packages have clear domain boundaries and can be adopted individually.
 
@@ -103,12 +103,98 @@ For detailed version bumping strategy, see **[Version Bumping Strategy](#version
 
 ### When Creating New Packages:
 
-**MUST update** `.github/workflows/publish-packages.yml`:
-1. Find the `declare -A PACKAGES=(` section
-2. Add: `["NewPackageName"]="src/NewPackageName"`
-3. Commit the workflow change WITH the package creation
+**Complete Workflow for Creating a New NuGet Package:**
 
-Without this, the new package won't auto-publish to NuGet!
+1. **Create the package folder and files**:
+   ```bash
+   mkdir -p src/TheNerdCollective.NewPackage
+   cd src/TheNerdCollective.NewPackage
+   ```
+
+2. **Create `.csproj` file** following the standard template:
+   ```xml
+   <Project Sdk="Microsoft.NET.Sdk.Razor">
+     <PropertyGroup>
+       <TargetFramework>net10.0</TargetFramework>
+       <Nullable>enable</Nullable>
+       <ImplicitUsings>enable</ImplicitUsings>
+       <PackageId>TheNerdCollective.NewPackage</PackageId>
+       <Version>1.0.0</Version>
+       <Authors>The Nerd Collective</Authors>
+       <Description>Package description here</Description>
+       <PackageTags>tags;here</PackageTags>
+       <License>Apache-2.0</License>
+       <LicenseExpression>Apache-2.0</LicenseExpression>
+       <RepositoryUrl>https://github.com/janhjordie/TheNerdCollective.Components</RepositoryUrl>
+       <RepositoryType>git</RepositoryType>
+       <PackageReadmeFile>README.md</PackageReadmeFile>
+     </PropertyGroup>
+
+     <!-- Add package references if needed -->
+     <ItemGroup>
+       <PackageReference Include="MudBlazor" Version="8.15.0" />
+     </ItemGroup>
+
+     <!-- Include README in package -->
+     <ItemGroup>
+       <None Include="README.md" Pack="true" PackagePath="\" />
+     </ItemGroup>
+   </Project>
+   ```
+
+3. **Create comprehensive README.md** with:
+   - Package description and features
+   - Installation instructions
+   - Usage examples with code snippets
+   - API documentation
+   - Troubleshooting section
+
+4. **Add to solution file** (`TheNerdCollective.Components.sln`):
+   - Add `Project` entry in the appropriate section
+   - Add build configuration for all platforms (Debug/Release, Any CPU/x64/x86)
+   - Add to `NestedProjects` section under the `src` folder
+
+5. **CRITICAL: Update GitHub Actions workflow** (`.github/workflows/publish-packages.yml`):
+   - Find the `declare -A PACKAGES=(` section
+   - Add: `["TheNerdCollective.NewPackage"]="src/TheNerdCollective.NewPackage"`
+   - **Without this, the package won't auto-publish to NuGet!**
+
+6. **Update project documentation**:
+   - Add package to `.github/copilot-instructions.md` in the "Project Structure & Package Domains" section
+   - Add package to root `README.md` in the appropriate category
+   - Update the package count in copilot-instructions.md Overview section
+
+7. **Verify build locally**:
+   ```bash
+   dotnet build
+   dotnet pack src/TheNerdCollective.NewPackage -c Release
+   ```
+
+8. **Commit and push** to trigger auto-publish:
+   ```bash
+   git add -A
+   git commit -m "feat: add TheNerdCollective.NewPackage v1.0.0
+   
+   - Created new package for [feature description]
+   - Added to solution and GitHub Actions workflow
+   - Comprehensive README with examples"
+   git push origin main
+   ```
+
+9. **Verify publishing**:
+   - Check GitHub Actions run at https://github.com/janhjordie/TheNerdCollective.Components/actions
+   - Verify package appears on NuGet.org within 5-10 minutes
+   - Test installation: `dotnet add package TheNerdCollective.NewPackage`
+
+**Checklist for New Packages:**
+- ✅ `.csproj` file with proper metadata
+- ✅ `README.md` with installation and usage instructions
+- ✅ Added to `TheNerdCollective.Components.sln`
+- ✅ Added to `.github/workflows/publish-packages.yml`
+- ✅ Updated `.github/copilot-instructions.md`
+- ✅ Updated root `README.md`
+- ✅ Build succeeds locally
+- ✅ Pushed to main branch
 
 ### Version Bumping Strategy (Semantic Versioning)
 
@@ -295,7 +381,7 @@ When creating a MAJOR version bump (breaking changes), you MUST:
 - **Status Endpoint**: JSON file at `/reconnection-status.json` with `version` field
 - **Deployment Aware**: Optional deployment phase info (status, ETA)
 
-#### **TheNerdCollective.Blazor.SessionMonitor** (Session Tracking)
+#### **TheNerdCollective.Blazor.SessionMonitor** (Session Tracking Service)
 - **Role**: Track active Blazor Server circuits/sessions for production monitoring
 - **Key Service**: `SessionMonitorService` with `ISessionMonitorService` interface
 - **Pattern**: CircuitHandler tracking session lifecycle, concurrent collections for thread-safety
@@ -308,6 +394,16 @@ When creating a MAJOR version bump (breaking changes), you MUST:
   - `/api/session-monitor/can-deploy` - Check if safe to deploy
 - **Use Cases**: Deployment automation, capacity planning, production monitoring
 - **Setup**: `AddSessionMonitoring()` + `MapSessionMonitoringEndpoints()`
+
+#### **TheNerdCollective.MudComponents.SessionMonitor** (Session Monitoring UI)
+- **Role**: MudBlazor components for visualizing session metrics and monitoring
+- **Key Components**: `SessionMonitorDashboard`, `SessionMetricsCard`, `DeploymentWindowsTable`, `SessionHistoryChart`, `SessionDetailsTable`
+- **Pattern**: Razor components consuming `ISessionMonitorService` directly
+- **Features**: Real-time dashboard with auto-refresh, deployment window calculator, historical data visualization
+- **Use Cases**: Admin dashboards, operational monitoring, deployment planning UIs
+- **Dependencies**: Requires `TheNerdCollective.Blazor.SessionMonitor` for service layer
+- **MudBlazor Compliance**: Follows v8.15.0+ standards, verified colors/icons, proper generic typing
+- **Setup**: `<SessionMonitorDashboard />` in any Razor page
 
 ---
 
@@ -402,7 +498,10 @@ await blobService.UploadAsync("container", "file.txt", stream);
 | Package | Primary Use | When to Use |
 |---------|------------|------------|
 | Components | Blazor UI + MudQuillEditor | Building MudBlazor-based UIs with rich-text |
+| MudQuillEditor | Rich-text editor | Standalone rich-text editing in Blazor |
 | MudSwiper | Carousel/slider component | Adding touch-enabled, responsive carousels to Blazor apps |
+| HarvestTimesheet | Timesheet UI | Displaying Harvest timesheets in Blazor |
+| SessionMonitor (UI) | Session monitoring dashboard | Admin dashboards for session monitoring |
 | Helpers | File, Date, CSV, Zip utilities | Common .NET operations without dependencies |
 | Services | Azure Blob, DI extensions | Cloud storage + scalable service abstractions |
 | Harvest | Timesheet API access | Integrating GetHarvest data into .NET apps |
@@ -410,7 +509,7 @@ await blobService.UploadAsync("container", "file.txt", stream);
 | AzurePipelines | Pipeline orchestration | Querying/running Azure DevOps pipelines |
 | Reconnect | Circuit reconnection UI | Better UX for Blazor Server disconnects |
 | VersionMonitor | Update notifications | Notifying users of deployed version changes |
-| SessionMonitor | Session tracking & monitoring | Production monitoring, deployment automation, capacity planning |
+| SessionMonitor (Service) | Session tracking API | Production monitoring, deployment automation, capacity planning |
 
 ---
 

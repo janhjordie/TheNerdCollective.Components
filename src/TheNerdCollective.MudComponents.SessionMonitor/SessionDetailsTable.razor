@@ -1,0 +1,51 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudStack Spacing="3" Class="pa-4">
+    <MudText Typo="Typo.subtitle1">Currently Active Circuits: @ActiveCircuits.Count()</MudText>
+
+    @if (!ActiveCircuits.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            No active sessions at this moment.
+        </MudAlert>
+    }
+    else
+    {
+        <MudDataGrid T="string" Items="@ActiveCircuits" ReadOnly="true" Hover="true" Striped="true">
+            <Columns>
+                <PropertyColumn Property="x => x" Title="Circuit ID">
+                    <CellTemplate>
+                        <MudStack Row="true" Spacing="1" Class="align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Lan" Size="Size.Small" Color="Color.Success"/>
+                            <MudText Typo="Typo.body2">@context.Item</MudText>
+                        </MudStack>
+                    </CellTemplate>
+                </PropertyColumn>
+            </Columns>
+        </MudDataGrid>
+    }
+
+    <MudButton Variant="Variant.Outlined" 
+               Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Refresh"
+               OnClick="RefreshSessions">
+        Refresh List
+    </MudButton>
+</MudStack>
+
+@code {
+    private IEnumerable<string> ActiveCircuits = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshSessions();
+    }
+
+    private async Task RefreshSessions()
+    {
+        ActiveCircuits = SessionMonitor.GetActiveCircuitIds();
+        await Task.CompletedTask;
+    }
+}

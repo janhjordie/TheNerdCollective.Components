@@ -47,6 +47,7 @@ jobs:
             ["TheNerdCollective.MudComponents.MudQuillEditor"]="src/TheNerdCollective.MudComponents.MudQuillEditor"
             ["TheNerdCollective.MudComponents.MudSwiper"]="src/TheNerdCollective.MudComponents.MudSwiper"
             ["TheNerdCollective.MudComponents.HarvestTimesheet"]="src/TheNerdCollective.MudComponents.HarvestTimesheet"
+            ["TheNerdCollective.MudComponents.SessionMonitor"]="src/TheNerdCollective.MudComponents.SessionMonitor"
           )
           
           # Detect which packages changed

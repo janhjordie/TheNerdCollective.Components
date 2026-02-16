@@ -1,0 +1,125 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-4">
+    <MudStack Spacing="3">
+        <!-- Header -->
+        <MudStack Row="true" Class="align-center">
+            <MudText Typo="Typo.h4">Session Monitor Dashboard</MudText>
+            <MudSpacer/>
+            <MudButton Variant="Variant.Outlined" 
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="Refresh">
+                Refresh
+            </MudButton>
+        </MudStack>
+
+        <!-- Live Metrics Grid -->
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <SessionMetricsCard 
+                    Title="Active Sessions"
+                    Value="@CurrentMetrics.ActiveSessions.ToString()"
+                    Color="Color.Primary"
+                    Icon="@Icons.Material.Filled.Cloud"/>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <SessionMetricsCard 
+                    Title="Peak Sessions"
+                    Value="@CurrentMetrics.PeakSessions.ToString()"
+                    Color="Color.Warning"
+                    Icon="@Icons.Material.Filled.TrendingUp"/>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <SessionMetricsCard 
+                    Title="Total Started"
+                    Value="@CurrentMetrics.TotalSessionsStarted.ToString()"
+                    Color="Color.Success"
+                    Icon="@Icons.Material.Filled.CheckCircle"/>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <SessionMetricsCard 
+                    Title="Total Ended"
+                    Value="@CurrentMetrics.TotalSessionsEnded.ToString()"
+                    Color="Color.Info"
+                    Icon="@Icons.Material.Filled.CancelScheduleSend"/>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Average Duration -->
+        @if (CurrentMetrics.AverageSessionDurationSeconds.HasValue)
+        {
+            <MudPaper Class="pa-4">
+                <MudStack Row="true" Class="align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Medium"/>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Average Session Duration</MudText>
+                        <MudText Typo="Typo.h6">@FormatDuration(CurrentMetrics.AverageSessionDurationSeconds.Value)</MudText>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+
+        <!-- Tabs for Details -->
+        <MudTabs Outlined="true" ApplyEffectsToContainer="true">
+            <MudTabPanel Text="Active Sessions" Icon="@Icons.Material.Filled.Group">
+                <SessionDetailsTable />
+            </MudTabPanel>
+
+            <MudTabPanel Text="Deployment Windows" Icon="@Icons.Material.Filled.Timeline">
+                <DeploymentWindowsTable />
+            </MudTabPanel>
+
+            <MudTabPanel Text="History" Icon="@Icons.Material.Filled.History">
+                <SessionHistoryChart />
+            </MudTabPanel>
+        </MudTabs>
+
+        <!-- Last Updated -->
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-center">
+            Last updated: @CurrentMetrics.Timestamp.ToString("g")
+        </MudText>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private SessionMetrics CurrentMetrics = new();
+    private Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+        
+        // Auto-refresh every 5 seconds
+        _refreshTimer = new Timer(async _ =>
+        {
+            await Refresh();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task Refresh()
+    {
+        CurrentMetrics = SessionMonitor.GetCurrentMetrics();
+    }
+
+    private string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        if (ts.TotalMinutes < 1)
+            return $"{ts.Seconds}s";
+        if (ts.TotalHours < 1)
+            return $"{ts.Minutes}m {ts.Seconds}s";
+        return $"{ts.Hours}h {ts.Minutes}m";
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

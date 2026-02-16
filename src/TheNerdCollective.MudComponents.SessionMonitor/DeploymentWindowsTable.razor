@@ -1,0 +1,86 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudStack Spacing="3" Class="pa-4">
+    <MudNumericField T="int" 
+                  Label="Window Duration (minutes)" 
+                  @bind-Value="WindowMinutes"
+                  Min="1"
+                  Max="60"
+                  Variant="Variant.Outlined"/>
+
+    <MudButton Variant="Variant.Filled" 
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Calculate"
+               OnClick="CalculateWindows">
+        Find Optimal Windows
+    </MudButton>
+
+    @if (Windows.Any())
+    {
+        <MudText Typo="Typo.body2" Color="Color.Success">
+            Found @Windows.Count() optimal windows
+        </MudText>
+
+        <MudDataGrid T="DeploymentWindow" Items="@Windows" ReadOnly="true" Hover="true" Striped="true">
+            <Columns>
+                <TemplateColumn Title="Start Time">
+                    <CellTemplate>
+                        @context.Item.StartTime.ToString("g")
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="End Time">
+                    <CellTemplate>
+                        @context.Item.EndTime.ToString("g")
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Max Sessions">
+                    <CellTemplate>
+                        @context.Item.MaxActiveSessions
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Avg Sessions">
+                    <CellTemplate>
+                        @context.Item.AverageActiveSessions.ToString("F1")
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Status">
+                    <CellTemplate>
+                        @if (context.Item.ZeroSessionsWindow)
+                        {
+                            <MudChip Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle">
+                                Zero Sessions
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Schedule">
+                                Low Activity
+                            </MudChip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
+    }
+    else if (HasSearched)
+    {
+        <MudAlert Severity="Severity.Info">
+            No optimal deployment windows found for the specified criteria. Try increasing the window duration or looking further back in history.
+        </MudAlert>
+    }
+</MudStack>
+
+@code {
+    private int WindowMinutes = 5;
+    private IEnumerable<DeploymentWindow> Windows = new List<DeploymentWindow>();
+    private bool HasSearched = false;
+
+    private async Task CalculateWindows()
+    {
+        Windows = SessionMonitor.FindOptimalDeploymentWindows(WindowMinutes, 24);
+        HasSearched = true;
+        await Task.CompletedTask;
+    }
+}

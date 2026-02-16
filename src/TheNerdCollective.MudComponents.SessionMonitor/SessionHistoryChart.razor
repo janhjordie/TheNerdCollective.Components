@@ -1,0 +1,116 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudStack Spacing="3" Class="pa-4">
+    <MudText Typo="Typo.subtitle1">Session History</MudText>
+
+    <MudStack Row="true" Spacing="2" Class="align-flex-end">
+        <MudNumericField T="int" 
+                        Label="Hours Lookback" 
+                        @bind-Value="HoursLookback"
+                        Min="1"
+                        Max="168"
+                        Variant="Variant.Outlined"/>
+
+        <MudNumericField T="int"
+                        Label="Max Records"
+                        @bind-Value="MaxRecords"
+                        Min="10"
+                        Max="1000"
+                        Variant="Variant.Outlined"/>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="LoadHistory"
+                   Class="align-self-flex-end">
+            Load History
+        </MudButton>
+    </MudStack>
+
+    @if (History.Any())
+    {
+        <MudDataGrid T="SessionSnapshot" Items="@History" ReadOnly="true" Hover="true" Striped="true">
+            <Columns>
+                <TemplateColumn Title="Timestamp">
+                    <CellTemplate>
+                        @context.Item.Timestamp.ToString("g")
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Active Sessions">
+                    <CellTemplate>
+                        @context.Item.ActiveSessions
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Trend">
+                    <CellTemplate>
+                        @if (GetTrendIcon(context.Item) != null)
+                        {
+                            <MudIcon Icon="@GetTrendIcon(context.Item)" 
+                                    Color="@GetTrendColor(context.Item)"
+                                    Size="Size.Small"/>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
+    }
+    else if (HasSearched)
+    {
+        <MudAlert Severity="Severity.Info">
+            No history data available for the specified period. History is recorded when sessions start or end.
+        </MudAlert>
+    }
+</MudStack>
+
+@code {
+    private int HoursLookback = 1;
+    private int MaxRecords = 100;
+    private IEnumerable<SessionSnapshot> History = new List<SessionSnapshot>();
+    private bool HasSearched = false;
+
+    private async Task LoadHistory()
+    {
+        var since = DateTime.UtcNow.AddHours(-HoursLookback);
+        History = SessionMonitor.GetHistory(since, MaxRecords);
+        HasSearched = true;
+        await Task.CompletedTask;
+    }
+
+    private string? GetTrendIcon(SessionSnapshot snapshot)
+    {
+        var previous = History
+            .Where(s => s.Timestamp < snapshot.Timestamp)
+            .OrderByDescending(s => s.Timestamp)
+            .FirstOrDefault();
+
+        if (previous == null)
+            return null;
+
+        if (snapshot.ActiveSessions > previous.ActiveSessions)
+            return Icons.Material.Filled.TrendingUp;
+        if (snapshot.ActiveSessions < previous.ActiveSessions)
+            return Icons.Material.Filled.TrendingDown;
+
+        return null;
+    }
+
+    private Color GetTrendColor(SessionSnapshot snapshot)
+    {
+        var previous = History
+            .Where(s => s.Timestamp < snapshot.Timestamp)
+            .OrderByDescending(s => s.Timestamp)
+            .FirstOrDefault();
+
+        if (previous == null)
+            return Color.Default;
+
+        if (snapshot.ActiveSessions > previous.ActiveSessions)
+            return Color.Warning;
+        if (snapshot.ActiveSessions < previous.ActiveSessions)
+            return Color.Success;
+
+        return Color.Default;
+    }
+}

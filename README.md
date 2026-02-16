@@ -35,6 +35,15 @@ MudBlazor component for displaying and managing Harvest timesheets.
 - Month navigation, summaries, and billable vs. unbilled tracking
 - Depends on TheNerdCollective.Integrations.Harvest
 
+#### [TheNerdCollective.MudComponents.SessionMonitor](src/TheNerdCollective.MudComponents.SessionMonitor/README.md)
+MudBlazor components for monitoring Blazor Server sessions with real-time metrics and deployment planning.
+- **Real-time dashboard** with live session counts, peak sessions, and average duration
+- **Deployment window calculator** to find optimal zero/low-activity periods
+- **Session history viewer** with trend indicators
+- **Active circuit list** showing all connected sessions
+- Auto-refresh every 5 seconds for live monitoring
+- Seamless integration with TheNerdCollective.Blazor.SessionMonitor service
+
 ### Blazor Utilities
 
 #### [TheNerdCollective.Blazor.Reconnect](src/TheNerdCollective.Blazor.Reconnect/README.md)
@@ -101,8 +110,9 @@ Each package has its own README with detailed setup instructions, examples, and 
 - **Need utility helpers?** → [TheNerdCollective.Helpers](src/TheNerdCollective.Helpers/README.md)
 - **Using MudBlazor?** → [TheNerdCollective.MudComponents.MudQuillEditor](src/TheNerdCollective.MudComponents.MudQuillEditor/README.md)
 - **Setting up services?** → [TheNerdCollective.Services](src/TheNerdCollective.Services/README.md)
-- **Monitoring Blazor Server?** → [SessionMonitor](src/TheNerdCollective.Blazor.SessionMonitor/README.md)
+- **Monitoring Blazor Server sessions?** → [SessionMonitor Service](src/TheNerdCollective.Blazor.SessionMonitor/README.md) (API) or [SessionMonitor Components](src/TheNerdCollective.MudComponents.SessionMonitor/README.md) (UI)
 - **Better reconnection UX?** → [Blazor.Reconnect](src/TheNerdCollective.Blazor.Reconnect/README.md)
+- **Version update notifications?** → [Blazor.VersionMonitor](src/TheNerdCollective.Blazor.VersionMonitor/README.md)
 
 ## 🔗 Integration Guide
 
