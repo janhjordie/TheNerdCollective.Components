@@ -3,6 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>CS8602</NoWarn>
     <PackageId>TheNerdCollective.MudComponents.MudSwiper</PackageId>
     <Version>0.5.0</Version>
     <Authors>The Nerd Collective</Authors>

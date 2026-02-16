@@ -7,12 +7,12 @@
 <div class="mud-swiper-container" style="@ContainerStyle">
     <div class="swiper mud-swiper" @ref="SwiperElement">
         <div class="swiper-wrapper">
-            @foreach (var slide in Slides ?? Enumerable.Empty<TSlide>())
+            @foreach (var slide in Slides)
             {
                 <div class="swiper-slide mud-swiper-slide">
-                    @if (SlideTemplate != null)
+                    @if (SlideTemplate is not null)
                     {
-                        @SlideTemplate(slide)
+                        @SlideTemplate.Invoke(slide)
                     }
                     else
                     {
@@ -44,7 +44,7 @@
     /// The slides to display in the carousel.
     /// </summary>
     [Parameter]
-    public IEnumerable<TSlide>? Slides { get; set; } = new List<TSlide>();
+    public IEnumerable<TSlide> Slides { get; set; } = new List<TSlide>();
 
     /// <summary>
     /// Template for rendering each slide. If not provided, ToString() is used.
