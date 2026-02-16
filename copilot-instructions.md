@@ -1,4 +1,61 @@
-Important Copilot Instructions
+---
+title: "GitHub Copilot Instructions for TheNerdCollective.Components"
+created: "16-02-2026"
+last_updated: "16-02-2026"
+---
+
+# GitHub Copilot Instructions for TheNerdCollective.Components
+
+## 🎯 PRIMARY RULE: ALWAYS Use Nerd Rules
+
+**This project follows "Nerd Rules" - a comprehensive library of development standards.**
+
+Location: `docs/00-nerd-rules-submodule/` (git submodule)
+
+### Before ANY Work: Read the Master Instructions
+
+**MANDATORY**: Study this file CLOSELY:
+- **`docs/00-nerd-rules-submodule/00-nerd-rules.md`** - Master instruction set for all development work
+
+### Mandatory Standards (ALWAYS Apply)
+
+**ALL files in `docs/00-nerd-rules-submodule/01-project-rules/` are MANDATORY:**
+
+1. ✅ `00-general-project-rules.md` - **CRITICAL**
+   - Rule 1: Documentation is Specification
+   - Rule 2: Never Assume Policy
+   - Rule 3: Standard Over Custom
+   - Rule 4: Code Consistency
+   - Rule 5: 🚨 **ALWAYS CHECK BEFORE CREATING** (Search First Rule)
+   - Rule 6: 🚨 **DRY Principle** (Don't Repeat Yourself)
+   - Rule 7: 🚨 **Simplicity Principle** (KISS - Keep It Simple)
+
+2. ✅ `01-markdown-naming-conventions.md` - Documentation standards
+3. ✅ `02-documentation-structure.md` - Folder hierarchy
+4. ✅ `03-project-documentation-standards.md` - Content templates
+5. ✅ `04-tech-stack-standards.md` - Technology constraints
+6. ✅ `05-architectural-patterns.md` - DI, Repository, Polly
+7. ✅ `06-testing-standards.md` - Testing requirements
+8. ✅ `07-git-workflow.md` - Git branching, commits
+9. ✅ `08-api-design-standards.md` - REST conventions
+10. ✅ `09-error-handling-logging.md` - Error patterns
+11. ✅ `10-database-standards.md` - Database naming
+12. ✅ `11-security-standards.md` - Security practices
+13. ✅ `12-performance-standards.md` - Performance targets
+14. ✅ `13-code-review-checklist.md` - Code review standards
+
+### Technology-Specific Standards
+
+**Detected & Enabled**:
+- 🔧 `14-blazor-standards.md` - Blazor Server standards (This project uses Blazor)
+- 🔧 `15-efcore-standards.md` - EF Core standards (This project uses EF Core)
+- 🔧 `17-background-jobs-standards.md` - Background job standards (if applicable)
+
+To scan the entire project for other relevant standards, run: **"use nerd rules"** or **"check nerd rules"**
+
+---
+
+## Important Copilot Instructions
 
 - Do not create new terminals. If an operation fails due to a port conflict or "address already in use" message, this indicates another terminal/process is already running and using the port.
 - If you encounter such an error, do NOT attempt to spawn or kill processes yourself. Instead, immediately notify me with the exact error message so I can stop the existing process manually.
