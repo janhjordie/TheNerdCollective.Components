@@ -45,12 +45,17 @@ public class AzurePipelinesService
     }
 
     /// <summary>
-    /// Get the latest pipeline runs for the configured project.
+    /// Get the most recent pipeline runs for the configured project.
     /// </summary>
-    /// <param name="limit">Maximum number of runs to retrieve (default: 10)</param>
-    /// <param name="statusFilter">Filter by state: inProgress, completed, cancelling, postponed, notStarted</param>
-    /// <param name="resultFilter">Filter by result: succeeded, partiallySucceeded, failed, canceled</param>
-    /// <returns>List of pipeline runs</returns>
+    /// <param name="limit">Maximum number of runs to retrieve (default: 10, max: 10000). Will be clamped to Azure Pipelines API limits.</param>
+    /// <param name="statusFilter">Optional filter by run state. Valid values: inProgress, completed, cancelling, postponed, notStarted.</param>
+    /// <param name="resultFilter">Optional filter by run result. Valid values: succeeded, partiallySucceeded, failed, canceled.</param>
+    /// <returns>A list of <see cref="PipelineRun"/> objects ordered by creation time (newest first). Returns an empty list if not found or an error occurs.</returns>
+    /// <remarks>
+    /// Use <see cref="GetPipelineRunsAsync"/> for more advanced filtering options (by pipeline ID, branch, sort order).
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://docs.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs/list
+    /// </remarks>
     public async Task<List<PipelineRun>> GetLatestPipelineRunsAsync(
         int limit = 10,
         string? statusFilter = null,
@@ -85,8 +90,20 @@ public class AzurePipelinesService
     }
 
     /// <summary>
-    /// Get pipeline runs with advanced filtering and sorting.
+    /// Get pipeline runs with advanced filtering, sorting, and branch targeting.
     /// </summary>
+    /// <param name="limit">Maximum number of runs to retrieve (default: 10, max: 10000).</param>
+    /// <param name="statusFilter">Optional filter by run state. Valid values: inProgress, completed, cancelling, postponed, notStarted.</param>
+    /// <param name="resultFilter">Optional filter by run result. Valid values: succeeded, partiallySucceeded, failed, canceled.</param>
+    /// <param name="pipelineId">Optional filter by specific pipeline ID. If null, queries all pipelines.</param>
+    /// <param name="branch">Optional filter by branch name (e.g., "main", "refs/heads/main"). URI-encoded automatically.</param>
+    /// <param name="orderBy">Optional sort specification. Common values: "finishTime desc" (newest first), "startTime desc".</param>
+    /// <returns>A filtered and sorted list of <see cref="PipelineRun"/> objects. Returns an empty list if not found or an error occurs.</returns>
+    /// <remarks>
+    /// Use <see cref="GetLatestPipelineRunsAsync"/> for simple queries without branch or pipeline ID filtering.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://docs.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs/list
+    /// </remarks>
     public async Task<List<PipelineRun>> GetPipelineRunsAsync(
         int limit = 10,
         string? statusFilter = null,
@@ -139,8 +156,17 @@ public class AzurePipelinesService
     }
 
     /// <summary>
-    /// Get a specific pipeline run by ID.
+    /// Get detailed information about a specific pipeline run.
     /// </summary>
+    /// <param name="pipelineId">The unique identifier of the pipeline.</param>
+    /// <param name="runId">The unique identifier of the pipeline run.</param>
+    /// <returns>A <see cref="PipelineRun"/> object with full run details, or null if not found or an error occurs.</returns>
+    /// <remarks>
+    /// Use <see cref="GetLatestPipelineRunsAsync"/> or <see cref="GetPipelineRunsAsync"/> to discover run IDs.
+    /// This method provides complete run state including job details and timeline events.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://docs.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs/get
+    /// </remarks>
     public async Task<PipelineRun?> GetPipelineRunAsync(int pipelineId, int runId)
     {
         try
@@ -161,8 +187,18 @@ public class AzurePipelinesService
     }
 
     /// <summary>
-    /// Queue a new pipeline run (trigger a build).
+    /// Queue a new pipeline run (trigger a build) with optional branch targeting and variable overrides.
     /// </summary>
+    /// <param name="pipelineId">The unique identifier of the pipeline to queue.</param>
+    /// <param name="sourceBranch">Optional branch to run the pipeline against (e.g., "refs/heads/main"). If null, uses the default branch.</param>
+    /// <param name="variables">Optional dictionary of pipeline variables to override. Keys are variable names, values are desired values.</param>
+    /// <returns>A new <see cref="PipelineRun"/> object representing the queued run, or null if the request fails.</returns>
+    /// <remarks>
+    /// Use <see cref="GetPipelineRunAsync"/> to monitor the queued run's status.
+    /// Use <see cref="CancelPipelineRunAsync"/> to stop a queued or running pipeline.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://docs.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs/run-pipeline
+    /// </remarks>
     public async Task<PipelineRun?> QueuePipelineRunAsync(int pipelineId, string? sourceBranch = null, Dictionary<string, string>? variables = null)
     {
         try
@@ -203,8 +239,17 @@ public class AzurePipelinesService
     }
 
     /// <summary>
-    /// Cancel a pipeline run.
+    /// Cancel a queued or in-progress pipeline run.
     /// </summary>
+    /// <param name="pipelineId">The unique identifier of the pipeline.</param>
+    /// <param name="runId">The unique identifier of the run to cancel.</param>
+    /// <returns>True if the cancellation request was successful; false if the run was not found or an error occurred.</returns>
+    /// <remarks>
+    /// Cancellation is asynchronous—the run will transition to "cancelling" state before reaching "completed" with "canceled" result.
+    /// Use <see cref="GetPipelineRunAsync"/> to monitor cancellation progress.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://docs.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs/update
+    /// </remarks>
     public async Task<bool> CancelPipelineRunAsync(int pipelineId, int runId)
     {
         try
@@ -228,8 +273,16 @@ public class AzurePipelinesService
     }
 
     /// <summary>
-    /// Get all pipelines in the project.
+    /// Get a list of all pipelines in the configured project.
     /// </summary>
+    /// <param name="limit">Maximum number of pipelines to retrieve (default: 100, max: 10000).</param>
+    /// <returns>A list of <see cref="Pipeline"/> objects with metadata for each pipeline. Returns an empty list if not found or an error occurs.</returns>
+    /// <remarks>
+    /// Use <see cref="GetPipelineAsync"/> to retrieve detailed information about a specific pipeline.
+    /// Use <see cref="GetLatestPipelineRunsAsync"/> to query runs across all pipelines.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://docs.microsoft.com/en-us/rest/api/azure/devops/pipelines/pipelines/list
+    /// </remarks>
     public async Task<List<Pipeline>> GetPipelinesAsync(int limit = 100)
     {
         try
@@ -250,8 +303,16 @@ public class AzurePipelinesService
     }
 
     /// <summary>
-    /// Get a specific pipeline by ID.
+    /// Get detailed information about a specific pipeline.
     /// </summary>
+    /// <param name="pipelineId">The unique identifier of the pipeline.</param>
+    /// <returns>A <see cref="Pipeline"/> object with pipeline metadata and configuration, or null if not found or an error occurs.</returns>
+    /// <remarks>
+    /// Use <see cref="GetPipelinesAsync"/> to discover available pipeline IDs.
+    /// Use <see cref="QueuePipelineRunAsync"/> to trigger a pipeline run after retrieving its details.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://docs.microsoft.com/en-us/rest/api/azure/devops/pipelines/pipelines/get
+    /// </remarks>
     public async Task<Pipeline?> GetPipelineAsync(int pipelineId)
     {
         try

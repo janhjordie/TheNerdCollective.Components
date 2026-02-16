@@ -39,8 +39,20 @@ public class HarvestService
     }
 
     /// <summary>
-    /// Get timesheet entries for specified projects and date range.
+    /// Get timesheet entries for all configured projects within a specified date range.
     /// </summary>
+    /// <param name="startDate">The start date (inclusive) for the timesheet range in UTC.</param>
+    /// <param name="endDate">The end date (inclusive) for the timesheet range in UTC.</param>
+    /// <returns>
+    /// A sorted list of <see cref="TimesheetEntry"/> objects ordered by spent date, then by creation time.
+    /// Returns an empty list if no entries are found or an error occurs.
+    /// </returns>
+    /// <remarks>
+    /// This method queries all configured project IDs (via <see cref="AddProjectId"/>) and aggregates results.
+    /// Use <see cref="GetProjectsAsync"/> to discover available projects first.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://help.getharvest.com/api-v2/timesheets-api/timesheets/time-entries/
+    /// </remarks>
     public async Task<List<TimesheetEntry>> GetTimesheetEntriesAsync(DateTime startDate, DateTime endDate)
     {
         try
@@ -102,8 +114,15 @@ public class HarvestService
     }
 
     /// <summary>
-    /// Get all available projects.
+    /// Get all available projects from the configured Harvest account.
     /// </summary>
+    /// <returns>A list of <see cref="HarvestProject"/> objects from all projects in the account. Returns an empty list if an error occurs.</returns>
+    /// <remarks>
+    /// This method retrieves all projects with pagination (100 per page). Use the result to populate your project ID tracking via <see cref="AddProjectId"/>.
+    /// Use <see cref="GetTimesheetEntriesAsync"/> to fetch time entries for tracked projects.
+    /// This method uses exponential backoff retry policy (Polly) to handle transient failures.
+    /// API Reference: https://help.getharvest.com/api-v2/projects-api/projects/projects/
+    /// </remarks>
     public async Task<List<HarvestProject>> GetProjectsAsync()
     {
         try
