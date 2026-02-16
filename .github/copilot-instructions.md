@@ -66,6 +66,66 @@ dotnet pack src/TheNerdCollective.Services -c Release
 
 Without this, the new package won't auto-publish to NuGet!
 
+### Version Bumping Strategy (Semantic Versioning)
+
+**Standard semver format**: `MAJOR.MINOR.PATCH` (e.g., `1.0.5`, `2.1.0`)
+
+**When to bump each component:**
+
+| Situation | Bump Type | Example | Details |
+|-----------|-----------|---------|---------|
+| **Breaking API changes** | MAJOR | 1.0.0 → 2.0.0 | Method signature changes, removed public APIs, output format changes |
+| **New features, non-breaking** | MINOR | 1.0.0 → 1.1.0 | New public methods, new parameters (optional), new capabilities like Polly retry policies |
+| **Bug fixes, docs, internal changes** | PATCH | 1.0.0 → 1.0.1 | Bug fixes, XML documentation, internal refactoring, improved error handling |
+
+**How to bump versions:**
+
+1. **Identify affected packages** - Which packages changed? (e.g., GitHub, Harvest, AzurePipelines integration services)
+
+2. **Determine semantic version** - Review what changed:
+   ```
+   ✅ New Polly retry policies = MINOR bump (1.0.1 → 1.1.0)
+   ✅ XML API documentation only = PATCH bump (1.0.0 → 1.0.1)
+   ✅ Breaking API changes = MAJOR bump (1.0.0 → 2.0.0)
+   ```
+
+3. **Update each package's `.csproj` file**:
+   ```xml
+   <Version>1.1.0</Version>
+   ```
+   Location: `src/TheNerdCollective.Integrations.GitHub/TheNerdCollective.Integrations.GitHub.csproj`
+
+4. **Create single commit with all version bumps**:
+   ```bash
+   # When bumping multiple packages
+   git add -A
+   git commit -m "chore: bump integration packages to 1.1.0
+   
+   Changes:
+   - TheNerdCollective.Integrations.GitHub: 1.0.1 → 1.1.0
+   - TheNerdCollective.Integrations.Harvest: 1.0.20 → 1.1.0
+   - TheNerdCollective.Integrations.AzurePipelines: 1.0.1 → 1.1.0
+   
+   Reasons:
+   ✅ #2-CR: Polly retry policies with exponential backoff
+   ✅ #5-REC: Comprehensive XML API documentation"
+   ```
+
+5. **Push to main**:
+   ```bash
+   git push origin main
+   ```
+   ✅ GitHub Actions will build and publish all changed packages
+
+**Pro tips:**
+
+- ⚠️ **Document breaking changes** in commit message for MAJOR bumps
+- ✅ **Group related bumps** - If multiple packages change together, bump in same commit
+- 📋 **Track in action list** - Update `docs/00-nerd-rules-recommendations/nerd_rules_action_list_*.md` with completed work
+- 🔍 **Verify versions** - Use `grep_search` to find all `<Version>` tags before committing
+- ⏱️ **Monitor publishing** - Check GitHub Actions run and NuGet.org within minutes
+
+
 ---
 
 ## Project Structure & Package Domains
