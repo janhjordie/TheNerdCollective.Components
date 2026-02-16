@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>TheNerdCollective.Integrations.GitHub</PackageId>
-    <Version>1.0.1</Version>
+    <Version>1.1.0</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>Integration service for GitHub API v3, providing GitHub Actions workflow management and repository information.</Description>
     <PackageTags>github;actions;workflow;integration;api</PackageTags>
