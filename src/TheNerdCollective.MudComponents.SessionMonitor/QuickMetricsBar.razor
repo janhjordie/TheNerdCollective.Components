@@ -1,0 +1,149 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudPaper Class="@($"pa-2 {Class}")" Elevation="@Elevation">
+    <MudStack Row="true" Spacing="4" Class="align-center">
+        @if (ShowActive)
+        {
+            <MudStack Row="true" Spacing="1" Class="align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Cloud" Color="Color.Primary" Size="Size.Small"/>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Active:</MudText>
+                <MudText Typo="Typo.body1"><b>@CurrentMetrics.ActiveSessions</b></MudText>
+            </MudStack>
+        }
+
+        @if (ShowPeak)
+        {
+            <MudDivider Vertical="true" FlexItem="true"/>
+            <MudStack Row="true" Spacing="1" Class="align-center">
+                <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Warning" Size="Size.Small"/>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Peak:</MudText>
+                <MudText Typo="Typo.body1"><b>@CurrentMetrics.PeakSessions</b></MudText>
+            </MudStack>
+        }
+
+        @if (ShowStarted)
+        {
+            <MudDivider Vertical="true" FlexItem="true"/>
+            <MudStack Row="true" Spacing="1" Class="align-center">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small"/>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Started:</MudText>
+                <MudText Typo="Typo.body1"><b>@FormatLargeNumber(CurrentMetrics.TotalSessionsStarted)</b></MudText>
+            </MudStack>
+        }
+
+        @if (ShowEnded)
+        {
+            <MudDivider Vertical="true" FlexItem="true"/>
+            <MudStack Row="true" Spacing="1" Class="align-center">
+                <MudIcon Icon="@Icons.Material.Filled.CancelScheduleSend" Color="Color.Info" Size="Size.Small"/>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Ended:</MudText>
+                <MudText Typo="Typo.body1"><b>@FormatLargeNumber(CurrentMetrics.TotalSessionsEnded)</b></MudText>
+            </MudStack>
+        }
+
+        @if (ShowAvgDuration && CurrentMetrics.AverageSessionDurationSeconds.HasValue)
+        {
+            <MudDivider Vertical="true" FlexItem="true"/>
+            <MudStack Row="true" Spacing="1" Class="align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Default" Size="Size.Small"/>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Avg:</MudText>
+                <MudText Typo="Typo.body1"><b>@FormatDuration(CurrentMetrics.AverageSessionDurationSeconds.Value)</b></MudText>
+            </MudStack>
+        }
+
+        @if (ShowRefreshButton)
+        {
+            <MudSpacer/>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                          Size="Size.Small"
+                          OnClick="Refresh"/>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    private SessionMetrics CurrentMetrics = new();
+
+    /// <summary>
+    /// Whether to show active sessions count.
+    /// </summary>
+    [Parameter]
+    public bool ShowActive { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show peak sessions count.
+    /// </summary>
+    [Parameter]
+    public bool ShowPeak { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show total sessions started.
+    /// </summary>
+    [Parameter]
+    public bool ShowStarted { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show total sessions ended.
+    /// </summary>
+    [Parameter]
+    public bool ShowEnded { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show average session duration.
+    /// </summary>
+    [Parameter]
+    public bool ShowAvgDuration { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show the refresh button.
+    /// </summary>
+    [Parameter]
+    public bool ShowRefreshButton { get; set; } = true;
+
+    /// <summary>
+    /// Elevation of the paper container.
+    /// </summary>
+    [Parameter]
+    public int Elevation { get; set; } = 1;
+
+    /// <summary>
+    /// Additional CSS classes.
+    /// </summary>
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    /// <summary>
+    /// Manually refresh all metrics.
+    /// </summary>
+    public void Refresh()
+    {
+        CurrentMetrics = SessionMonitor.GetCurrentMetrics();
+        StateHasChanged();
+    }
+
+    private string FormatLargeNumber(long number)
+    {
+        if (number >= 1000000)
+            return $"{number / 1000000.0:F1}M";
+        if (number >= 1000)
+            return $"{number / 1000.0:F1}K";
+        return number.ToString();
+    }
+
+    private string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        if (ts.TotalHours >= 1)
+            return $"{ts.Hours}h {ts.Minutes}m";
+        if (ts.TotalMinutes >= 1)
+            return $"{ts.Minutes}m {ts.Seconds}s";
+        return $"{ts.Seconds}s";
+    }
+}

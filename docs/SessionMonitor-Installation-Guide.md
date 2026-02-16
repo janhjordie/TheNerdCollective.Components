@@ -143,6 +143,219 @@ You can also use components separately for custom layouts:
 }
 ```
 
+### Building Block Components (v1.1.0+)
+
+Starting with **v1.1.0**, you can use granular building block components to create custom dashboards tailored to your needs. These components are smaller, focused, and can be mixed and matched.
+
+#### Quick Metrics Bar
+
+Perfect for headers or compact dashboards:
+
+```razor
+@page "/compact-monitor"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    <QuickMetricsBar 
+        ShowActive="true"
+        ShowPeak="true"
+        ShowStarted="false"
+        ShowEnded="false"
+        ShowAvgDuration="true"
+        ShowRefreshButton="true"/>
+</MudContainer>
+```
+
+#### Capacity Monitoring
+
+Use gauges and counters for capacity planning:
+
+```razor
+@page "/capacity"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h4">Session Capacity</MudText>
+        
+        <!-- Progress bar gauge -->
+        <SessionGauge 
+            MaxCapacity="200"
+            Metric="SessionGauge.GaugeMetric.ActiveSessions"
+            WarningThreshold="75"
+            ErrorThreshold="90"
+            ShowValue="true"/>
+        
+        <!-- Large counters -->
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6">
+                    <ActiveSessionsCounter 
+                        Label="Current Active"
+                        ValueTypo="Typo.h2"
+                        ValueColor="Color.Primary"
+                        ShowIcon="true"
+                        IconSize="Size.Large"/>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6">
+                    <PeakSessionsCounter 
+                        Label="Peak Today"
+                        ValueTypo="Typo.h2"
+                        ValueColor="Color.Warning"
+                        ShowIcon="true"
+                        IconSize="Size.Large"/>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</MudContainer>
+```
+
+#### Deployment Operations Dashboard
+
+Combine safety indicators with deployment windows:
+
+```razor
+@page "/ops/deploy"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudStack Spacing="3">
+        <!-- Header with safety indicator -->
+        <MudStack Row="true" Class="align-center">
+            <MudText Typo="Typo.h4">Deployment Operations</MudText>
+            <MudSpacer/>
+            <DeploymentSafetyIndicator 
+                MaxAllowedSessions="0"
+                SafeText="✓ Deploy Now"
+                UnsafeText="⚠ Active Sessions"
+                ShowSessionCount="true"
+                ChipSize="Size.Large"/>
+        </MudStack>
+        
+        <!-- Trend indicator -->
+        <MudPaper Class="pa-4">
+            <MudStack Row="true" Spacing="3" Class="align-center">
+                <MudText Typo="Typo.subtitle1">Session Trend (5min):</MudText>
+                <SessionTrendIndicator 
+                    TimeWindowMinutes="5"
+                    ShowPercentage="true"
+                    IconSize="Size.Large"/>
+            </MudStack>
+        </MudPaper>
+        
+        <!-- Deployment windows table -->
+        <DeploymentWindowsTable />
+    </MudStack>
+</MudContainer>
+```
+
+#### Minimal Status Bar
+
+Use badges for compact inline metrics:
+
+```razor
+@page "/status"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudAppBar>
+    <MudText Typo="Typo.h6">My App</MudText>
+    <MudSpacer/>
+    
+    <!-- Active sessions badge on icon -->
+    <SessionStatsBadge 
+        Metric="SessionStatsBadge.MetricType.ActiveSessions"
+        BadgeColor="Color.Primary">
+        <MudIconButton Icon="@Icons.Material.Filled.Cloud" Color="Color.Inherit"/>
+    </SessionStatsBadge>
+    
+    <!-- Deployment safety indicator -->
+    <DeploymentSafetyIndicator 
+        MaxAllowedSessions="5"
+        ChipSize="Size.Small"
+        ChipVariant="Variant.Outlined"/>
+</MudAppBar>
+```
+
+#### Reactive Dashboard with Event Callbacks
+
+Use event callbacks to react to metric changes:
+
+```razor
+@page "/reactive"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudStack Spacing="3">
+        <MudAlert Severity="@AlertSeverity" Variant="Variant.Filled">
+            @AlertMessage
+        </MudAlert>
+        
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <ActiveSessionsCounter 
+                    OnCountChanged="OnSessionCountChanged"
+                    ValueTypo="Typo.h3"
+                    ShowIcon="true"/>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <DeploymentSafetyIndicator 
+                    MaxAllowedSessions="10"
+                    OnSafetyChanged="OnSafetyStatusChanged"
+                    ChipSize="Size.Large"/>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private Severity AlertSeverity = Severity.Info;
+    private string AlertMessage = "Monitoring sessions...";
+    
+    private void OnSessionCountChanged(int count)
+    {
+        if (count > 100)
+        {
+            AlertSeverity = Severity.Warning;
+            AlertMessage = $"High load: {count} active sessions";
+        }
+        else if (count > 50)
+        {
+            AlertSeverity = Severity.Info;
+            AlertMessage = $"Normal load: {count} active sessions";
+        }
+        else
+        {
+            AlertSeverity = Severity.Success;
+            AlertMessage = $"Low load: {count} active sessions";
+        }
+        StateHasChanged();
+    }
+    
+    private void OnSafetyStatusChanged(bool isSafe)
+    {
+        if (isSafe)
+        {
+            // Trigger deployment automation
+            Console.WriteLine("Safe to deploy - consider triggering deployment");
+        }
+    }
+}
+```
+
+**Available Building Blocks:**
+- `ActiveSessionsCounter` - Just active sessions count
+- `PeakSessionsCounter` - Just peak sessions count
+- `SessionTrendIndicator` - Trend arrow with optional percentage
+- `DeploymentSafetyIndicator` - Safe/unsafe chip indicator
+- `SessionStatsBadge` - Badge overlay for any content
+- `SessionGauge` - Progress bar style capacity gauge
+- `QuickMetricsBar` - Compact horizontal metrics bar
+
+See the [package README](../src/TheNerdCollective.MudComponents.SessionMonitor/README.md) for full API documentation.
+
 ---
 
 ## Option 2: API Only (Service Package)

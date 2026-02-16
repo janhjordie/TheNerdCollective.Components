@@ -25,6 +25,15 @@ MudBlazor components for monitoring Blazor Server sessions and circuits with rea
 - Configurable lookback period and data granularity
 - Trend indicators (up/down arrows) for easy analysis
 
+🧱 **Granular Building Blocks (v1.1.0+)**
+- 12 specialized components for custom dashboards
+- Mix and match: counters, indicators, gauges, badges
+- Full control over layout and styling
+- Event callbacks for reactive UIs
+- Capacity monitoring with color-coded thresholds
+- Deployment safety indicators
+- Session trend analysis
+
 ## Installation
 
 ### 1. Install NuGet Package
@@ -94,7 +103,11 @@ This displays:
 
 ### Individual Components
 
-#### SessionMetricsCard
+All components can be used individually or combined to create custom dashboards. Each component is self-contained and uses `ISessionMonitorService` internally.
+
+#### 📊 Composite Components (Full Features)
+
+##### SessionMetricsCard
 
 Display a single metric with icon and color:
 
@@ -109,44 +122,280 @@ Display a single metric with icon and color:
 **Parameters:**
 - `Title` (string): Metric label
 - `Value` (string): The value to display
-- `Color` (Color): MudBlazor color (Primary, Secondary, Success, Warning, Error, Info)
+- `Color` (Color): MudBlazor color
 - `Icon` (string): MudBlazor icon name
 
-#### SessionDetailsTable
+##### SessionDetailsTable
 
-Shows currently active circuit IDs:
+Shows currently active circuit IDs with refresh button:
 
 ```razor
 <SessionDetailsTable />
 ```
 
-**Parameters:** None (uses `ISessionMonitorService` internally)
+##### DeploymentWindowsTable
 
-#### DeploymentWindowsTable
-
-Find optimal deployment windows:
+Find optimal deployment windows with configurable duration:
 
 ```razor
 <DeploymentWindowsTable />
 ```
 
-Allows users to:
-- Adjust the window duration (1-60 minutes)
-- Calculate optimal windows with zero/minimal sessions
-- View max and average sessions during each window
+##### SessionHistoryChart
 
-#### SessionHistoryChart
-
-Display historical session data:
+Display historical session data with trend analysis:
 
 ```razor
 <SessionHistoryChart />
 ```
 
-Allows users to:
-- Set lookback period (1-168 hours)
-- Limit number of records displayed (10-1000)
-- See trend indicators for each snapshot
+---
+
+#### 🧱 Building Block Components (Granular Elements)
+
+##### ActiveSessionsCounter
+
+Display just the active sessions count:
+
+```razor
+<ActiveSessionsCounter 
+    Label="Current Sessions"
+    ValueTypo="Typo.h3"
+    ValueColor="Color.Primary"
+    ShowIcon="true"/>
+```
+
+**Parameters:**
+- `Label` (string): Label text above counter, default: "Active Sessions"
+- `LabelTypo` (Typo): Typography for label, default: `Typo.subtitle2`
+- `ValueTypo` (Typo): Typography for value, default: `Typo.h4`
+- `ValueColor` (Color): Color for value, default: `Color.Primary`
+- `ShowIcon` (bool): Show cloud icon, default: `false`
+- `IconSize` (Size): Icon size, default: `Size.Medium`
+- `OnCountChanged` (EventCallback<int>): Fires when count changes
+
+##### PeakSessionsCounter
+
+Display just the peak sessions count:
+
+```razor
+<PeakSessionsCounter 
+    Label="Peak Today"
+    ValueColor="Color.Warning"
+    ShowIcon="true"/>
+```
+
+**Parameters:** Same as `ActiveSessionsCounter`, default label: "Peak Sessions"
+
+##### SessionTrendIndicator
+
+Show trending direction with optional percentage:
+
+```razor
+<SessionTrendIndicator 
+    ShowPercentage="true"
+    TimeWindowMinutes="5"
+    IconSize="Size.Large"/>
+```
+
+**Parameters:**
+- `Label` (string): Label text, default: "Trend"
+- `ShowLabel` (bool): Show label, default: `true`
+- `ShowPercentage` (bool): Show percentage change, default: `false`
+- `TimeWindowMinutes` (int): Time window for trend calculation, default: `5`
+- `IconSize` (Size): Icon size, default: `Size.Medium`
+
+**Trend Logic:**
+- ⬆️ Green arrow if sessions increasing
+- ⬇️ Red arrow if sessions decreasing
+- ➡️ Gray arrow if stable
+
+##### DeploymentSafetyIndicator
+
+Show if it's safe to deploy (chip-style):
+
+```razor
+<DeploymentSafetyIndicator 
+    MaxAllowedSessions="0"
+    ShowSessionCount="true"
+    ChipSize="Size.Large"/>
+```
+
+**Parameters:**
+- `MaxAllowedSessions` (int): Max sessions for "safe", default: `0`
+- `SafeText` (string): Text when safe, default: "Safe to Deploy"
+- `UnsafeText` (string): Text when unsafe, default: "Active Sessions"
+- `ShowSessionCount` (bool): Show count in unsafe state, default: `true`
+- `ChipSize` (Size): Chip size, default: `Size.Medium`
+- `ChipVariant` (Variant): Chip variant, default: `Variant.Filled`
+- `OnSafetyChanged` (EventCallback<bool>): Fires when safety status changes
+
+**Colors:**
+- 🟢 Green when safe
+- 🔴 Red when unsafe (shows session count)
+
+##### SessionStatsBadge
+
+Badge overlay for any content:
+
+```razor
+<SessionStatsBadge Metric="SessionStatsBadge.MetricType.ActiveSessions"
+                   BadgeColor="Color.Primary">
+    <MudIconButton Icon="@Icons.Material.Filled.Cloud"/>
+</SessionStatsBadge>
+```
+
+**Parameters:**
+- `Metric` (MetricType): Which metric to display
+  - `ActiveSessions`, `PeakSessions`, `TotalStarted`, `TotalEnded`
+- `BadgeColor` (Color): Badge color, default: `Color.Primary`
+- `Overlap` (bool): Overlap child content, default: `true`
+- `Bordered` (bool): Show border, default: `true`
+- `ChildContent` (RenderFragment): Content to badge
+
+**Auto-formatting:**
+- Large numbers: `1500` → `1.5K`, `2000000` → `2.0M`
+
+##### SessionGauge
+
+Progress bar style capacity gauge:
+
+```razor
+<SessionGauge 
+    MaxCapacity="100"
+    Metric="SessionGauge.GaugeMetric.ActiveSessions"
+    WarningThreshold="70"
+    ErrorThreshold="90"/>
+```
+
+**Parameters:**
+- `Label` (string): Gauge label, default: "Session Capacity"
+- `ShowLabel` (bool): Show label, default: `true`
+- `ShowValue` (bool): Show current/max text, default: `true`
+- `MaxCapacity` (int): 100% value, default: `100`
+- `Metric` (GaugeMetric): Which metric to display
+  - `ActiveSessions`, `PeakSessions`
+- `ProgressSize` (Size): Progress bar size, default: `Size.Medium`
+- `Rounded` (bool): Rounded progress bar, default: `true`
+- `Striped` (bool): Striped effect, default: `false`
+- `WarningThreshold` (double): % for warning color, default: `70`
+- `ErrorThreshold` (double): % for error color, default: `90`
+
+**Color Logic:**
+- 🟢 Green: Below warning threshold
+- 🟡 Yellow: Between warning and error threshold
+- 🔴 Red: Above error threshold
+
+##### QuickMetricsBar
+
+Compact horizontal bar with all metrics:
+
+```razor
+<QuickMetricsBar 
+    ShowActive="true"
+    ShowPeak="true"
+    ShowStarted="true"
+    ShowEnded="true"
+    ShowAvgDuration="true"
+    ShowRefreshButton="true"/>
+```
+
+**Parameters:**
+- `ShowActive` (bool): Show active sessions, default: `true`
+- `ShowPeak` (bool): Show peak sessions, default: `true`
+- `ShowStarted` (bool): Show total started, default: `true`
+- `ShowEnded` (bool): Show total ended, default: `true`
+- `ShowAvgDuration` (bool): Show avg duration, default: `true`
+- `ShowRefreshButton` (bool): Show refresh button, default: `true`
+- `Elevation` (int): Paper elevation, default: `1`
+
+**Perfect for:**
+- Admin headers
+- Status bars
+- Compact dashboards
+- Mobile layouts
+
+---
+
+### 🎨 Custom Dashboard Examples
+
+Build your own dashboard by mixing components:
+
+#### Minimal Dashboard
+
+```razor
+@page "/minimal-monitor"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudStack Spacing="3">
+        <QuickMetricsBar />
+        
+        <MudGrid>
+            <MudItem xs="6">
+                <SessionTrendIndicator ShowPercentage="true"/>
+            </MudItem>
+            <MudItem xs="6">
+                <DeploymentSafetyIndicator MaxAllowedSessions="5"/>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</MudContainer>
+```
+
+#### Capacity Monitoring Dashboard
+
+```razor
+@page "/capacity"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h4">Capacity Monitoring</MudText>
+        
+        <SessionGauge 
+            MaxCapacity="200"
+            WarningThreshold="75"
+            ErrorThreshold="90"/>
+        
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <ActiveSessionsCounter 
+                    ValueTypo="Typo.h2"
+                    ShowIcon="true"/>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <PeakSessionsCounter 
+                    ValueTypo="Typo.h2"
+                    ShowIcon="true"/>
+            </MudItem>
+        </MudGrid>
+        
+        <SessionHistoryChart />
+    </MudStack>
+</MudContainer>
+```
+
+#### Deployment Operations Dashboard
+
+```razor
+@page "/ops"
+@using TheNerdCollective.MudComponents.SessionMonitor
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudStack Spacing="3">
+        <MudStack Row="true" Class="align-center">
+            <MudText Typo="Typo.h4">Deployment Operations</MudText>
+            <MudSpacer/>
+            <DeploymentSafetyIndicator ChipSize="Size.Large"/>
+        </MudStack>
+        
+        <QuickMetricsBar ShowRefreshButton="true"/>
+        
+        <DeploymentWindowsTable />
+    </MudStack>
+</MudContainer>
+```
 
 ## MudBlazor Compliance
 

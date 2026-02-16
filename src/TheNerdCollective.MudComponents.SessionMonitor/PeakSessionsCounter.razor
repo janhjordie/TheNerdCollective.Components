@@ -1,0 +1,72 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudStack Spacing="1" Class="@Class">
+    <MudText Typo="@LabelTypo" Color="Color.Secondary">@Label</MudText>
+    <MudText Typo="@ValueTypo" Color="@ValueColor">@PeakCount</MudText>
+    @if (ShowIcon)
+    {
+        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="@ValueColor" Size="@IconSize"/>
+    }
+</MudStack>
+
+@code {
+    private int PeakCount = 0;
+
+    /// <summary>
+    /// Label text to display above the counter.
+    /// </summary>
+    [Parameter]
+    public string Label { get; set; } = "Peak Sessions";
+
+    /// <summary>
+    /// Typography size for the label.
+    /// </summary>
+    [Parameter]
+    public Typo LabelTypo { get; set; } = Typo.subtitle2;
+
+    /// <summary>
+    /// Typography size for the value.
+    /// </summary>
+    [Parameter]
+    public Typo ValueTypo { get; set; } = Typo.h4;
+
+    /// <summary>
+    /// Color for the value display.
+    /// </summary>
+    [Parameter]
+    public Color ValueColor { get; set; } = Color.Warning;
+
+    /// <summary>
+    /// Whether to show the icon.
+    /// </summary>
+    [Parameter]
+    public bool ShowIcon { get; set; } = false;
+
+    /// <summary>
+    /// Size of the icon.
+    /// </summary>
+    [Parameter]
+    public Size IconSize { get; set; } = Size.Medium;
+
+    /// <summary>
+    /// Additional CSS classes.
+    /// </summary>
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    /// <summary>
+    /// Manually refresh the counter.
+    /// </summary>
+    public void Refresh()
+    {
+        var metrics = SessionMonitor.GetCurrentMetrics();
+        PeakCount = metrics.PeakSessions;
+    }
+}

@@ -1,0 +1,103 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudChip T="string"
+         Color="@StatusColor" 
+         Icon="@StatusIcon" 
+         Size="@ChipSize"
+         Variant="@ChipVariant"
+         Class="@Class">
+    @StatusText
+</MudChip>
+
+@code {
+    private Color StatusColor = Color.Success;
+    private string StatusIcon = Icons.Material.Filled.CheckCircle;
+    private string StatusText = "Safe to Deploy";
+
+    /// <summary>
+    /// Maximum allowed active sessions for safe deployment.
+    /// </summary>
+    [Parameter]
+    public int MaxAllowedSessions { get; set; } = 0;
+
+    /// <summary>
+    /// Text to display when safe to deploy.
+    /// </summary>
+    [Parameter]
+    public string SafeText { get; set; } = "Safe to Deploy";
+
+    /// <summary>
+    /// Text to display when unsafe to deploy.
+    /// </summary>
+    [Parameter]
+    public string UnsafeText { get; set; } = "Active Sessions";
+
+    /// <summary>
+    /// Whether to show session count in the unsafe state.
+    /// </summary>
+    [Parameter]
+    public bool ShowSessionCount { get; set; } = true;
+
+    /// <summary>
+    /// Size of the chip.
+    /// </summary>
+    [Parameter]
+    public Size ChipSize { get; set; } = Size.Medium;
+
+    /// <summary>
+    /// Variant of the chip.
+    /// </summary>
+    [Parameter]
+    public Variant ChipVariant { get; set; } = Variant.Filled;
+
+    /// <summary>
+    /// Additional CSS classes.
+    /// </summary>
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Event callback when safety status changes.
+    /// </summary>
+    [Parameter]
+    public EventCallback<bool> OnSafetyChanged { get; set; }
+
+    private bool _lastSafeStatus = true;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    /// <summary>
+    /// Manually refresh the safety indicator.
+    /// </summary>
+    public void Refresh()
+    {
+        var metrics = SessionMonitor.GetCurrentMetrics();
+        var isSafe = metrics.ActiveSessions <= MaxAllowedSessions;
+
+        if (isSafe)
+        {
+            StatusColor = Color.Success;
+            StatusIcon = Icons.Material.Filled.CheckCircle;
+            StatusText = SafeText;
+        }
+        else
+        {
+            StatusColor = Color.Error;
+            StatusIcon = Icons.Material.Filled.Warning;
+            StatusText = ShowSessionCount 
+                ? $"{UnsafeText} ({metrics.ActiveSessions})"
+                : UnsafeText;
+        }
+
+        if (isSafe != _lastSafeStatus)
+        {
+            _lastSafeStatus = isSafe;
+            OnSafetyChanged.InvokeAsync(isSafe);
+        }
+    }
+}

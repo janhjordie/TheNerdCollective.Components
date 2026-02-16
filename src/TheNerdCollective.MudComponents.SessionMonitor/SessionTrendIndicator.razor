@@ -1,0 +1,102 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudStack Row="true" Spacing="1" Class="@($"align-center {Class}")">
+    @if (ShowLabel)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@Label</MudText>
+    }
+    <MudIcon Icon="@TrendIcon" Color="@TrendColor" Size="@IconSize"/>
+    @if (ShowPercentage && PercentageChange.HasValue)
+    {
+        <MudText Typo="Typo.body2" Color="@TrendColor">
+            @PercentageChange.Value.ToString("F1")%
+        </MudText>
+    }
+</MudStack>
+
+@code {
+    private string TrendIcon = Icons.Material.Filled.TrendingFlat;
+    private Color TrendColor = Color.Default;
+    private double? PercentageChange;
+
+    /// <summary>
+    /// Label to display next to the trend indicator.
+    /// </summary>
+    [Parameter]
+    public string Label { get; set; } = "Trend";
+
+    /// <summary>
+    /// Whether to show the label.
+    /// </summary>
+    [Parameter]
+    public bool ShowLabel { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show percentage change.
+    /// </summary>
+    [Parameter]
+    public bool ShowPercentage { get; set; } = false;
+
+    /// <summary>
+    /// Time window for trend calculation in minutes.
+    /// </summary>
+    [Parameter]
+    public int TimeWindowMinutes { get; set; } = 5;
+
+    /// <summary>
+    /// Size of the icon.
+    /// </summary>
+    [Parameter]
+    public Size IconSize { get; set; } = Size.Medium;
+
+    /// <summary>
+    /// Additional CSS classes.
+    /// </summary>
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    /// <summary>
+    /// Manually refresh the trend indicator.
+    /// </summary>
+    public void Refresh()
+    {
+        var history = SessionMonitor.GetHistory(DateTime.UtcNow.AddMinutes(-TimeWindowMinutes));
+        
+        if (history.Count() < 2)
+        {
+            TrendIcon = Icons.Material.Filled.TrendingFlat;
+            TrendColor = Color.Default;
+            PercentageChange = null;
+            return;
+        }
+
+        var oldest = history.First().ActiveSessions;
+        var newest = history.Last().ActiveSessions;
+        
+        if (newest > oldest)
+        {
+            TrendIcon = Icons.Material.Filled.TrendingUp;
+            TrendColor = Color.Success;
+            PercentageChange = oldest > 0 ? ((newest - oldest) / (double)oldest) * 100 : 100;
+        }
+        else if (newest < oldest)
+        {
+            TrendIcon = Icons.Material.Filled.TrendingDown;
+            TrendColor = Color.Error;
+            PercentageChange = oldest > 0 ? ((oldest - newest) / (double)oldest) * -100 : -100;
+        }
+        else
+        {
+            TrendIcon = Icons.Material.Filled.TrendingFlat;
+            TrendColor = Color.Default;
+            PercentageChange = 0;
+        }
+    }
+}

@@ -1,0 +1,136 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudStack Spacing="2" Class="@Class">
+    @if (ShowLabel)
+    {
+        <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@Label</MudText>
+    }
+    
+    <MudProgressLinear Color="@ProgressColor" 
+                       Value="@ProgressValue" 
+                       Size="@ProgressSize"
+                       Rounded="@Rounded"
+                       Striped="@Striped"/>
+    
+    @if (ShowValue)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+            @CurrentValue / @MaxCapacity (@ProgressValue.ToString("F0")%)
+        </MudText>
+    }
+</MudStack>
+
+@code {
+    private double ProgressValue = 0;
+    private int CurrentValue = 0;
+    private Color ProgressColor = Color.Primary;
+
+    /// <summary>
+    /// Label for the gauge.
+    /// </summary>
+    [Parameter]
+    public string Label { get; set; } = "Session Capacity";
+
+    /// <summary>
+    /// Whether to show the label.
+    /// </summary>
+    [Parameter]
+    public bool ShowLabel { get; set; } = true;
+
+    /// <summary>
+    /// Whether to show the current value text.
+    /// </summary>
+    [Parameter]
+    public bool ShowValue { get; set; } = true;
+
+    /// <summary>
+    /// Maximum capacity for the gauge (100% value).
+    /// </summary>
+    [Parameter]
+    public int MaxCapacity { get; set; } = 100;
+
+    /// <summary>
+    /// Which metric to display in the gauge.
+    /// </summary>
+    [Parameter]
+    public GaugeMetric Metric { get; set; } = GaugeMetric.ActiveSessions;
+
+    /// <summary>
+    /// Size of the progress bar.
+    /// </summary>
+    [Parameter]
+    public Size ProgressSize { get; set; } = Size.Medium;
+
+    /// <summary>
+    /// Whether the progress bar is rounded.
+    /// </summary>
+    [Parameter]
+    public bool Rounded { get; set; } = true;
+
+    /// <summary>
+    /// Whether the progress bar is striped.
+    /// </summary>
+    [Parameter]
+    public bool Striped { get; set; } = false;
+
+    /// <summary>
+    /// Threshold percentage for warning color (default 70%).
+    /// </summary>
+    [Parameter]
+    public double WarningThreshold { get; set; } = 70;
+
+    /// <summary>
+    /// Threshold percentage for error color (default 90%).
+    /// </summary>
+    [Parameter]
+    public double ErrorThreshold { get; set; } = 90;
+
+    /// <summary>
+    /// Additional CSS classes.
+    /// </summary>
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    public enum GaugeMetric
+    {
+        ActiveSessions,
+        PeakSessions
+    }
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    /// <summary>
+    /// Manually refresh the gauge.
+    /// </summary>
+    public void Refresh()
+    {
+        var metrics = SessionMonitor.GetCurrentMetrics();
+
+        CurrentValue = Metric switch
+        {
+            GaugeMetric.ActiveSessions => metrics.ActiveSessions,
+            GaugeMetric.PeakSessions => metrics.PeakSessions,
+            _ => 0
+        };
+
+        ProgressValue = Math.Min((CurrentValue / (double)MaxCapacity) * 100, 100);
+
+        if (ProgressValue >= ErrorThreshold)
+        {
+            ProgressColor = Color.Error;
+        }
+        else if (ProgressValue >= WarningThreshold)
+        {
+            ProgressColor = Color.Warning;
+        }
+        else
+        {
+            ProgressColor = Color.Success;
+        }
+    }
+}

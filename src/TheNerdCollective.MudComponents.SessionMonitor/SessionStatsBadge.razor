@@ -1,0 +1,90 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudBadge Content="@BadgeContent" 
+          Color="@BadgeColor" 
+          Overlap="@Overlap"
+          Bordered="@Bordered"
+          Class="@Class">
+    @ChildContent
+</MudBadge>
+
+@code {
+    private string BadgeContent = "0";
+
+    /// <summary>
+    /// Which metric to display in the badge.
+    /// </summary>
+    [Parameter]
+    public MetricType Metric { get; set; } = MetricType.ActiveSessions;
+
+    /// <summary>
+    /// Color of the badge.
+    /// </summary>
+    [Parameter]
+    public Color BadgeColor { get; set; } = Color.Primary;
+
+    /// <summary>
+    /// Whether the badge overlaps its child content.
+    /// </summary>
+    [Parameter]
+    public bool Overlap { get; set; } = true;
+
+    /// <summary>
+    /// Whether the badge has a border.
+    /// </summary>
+    [Parameter]
+    public bool Bordered { get; set; } = true;
+
+    /// <summary>
+    /// Child content to badge.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Additional CSS classes.
+    /// </summary>
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    public enum MetricType
+    {
+        ActiveSessions,
+        PeakSessions,
+        TotalStarted,
+        TotalEnded
+    }
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    /// <summary>
+    /// Manually refresh the badge.
+    /// </summary>
+    public void Refresh()
+    {
+        var metrics = SessionMonitor.GetCurrentMetrics();
+
+        BadgeContent = Metric switch
+        {
+            MetricType.ActiveSessions => metrics.ActiveSessions.ToString(),
+            MetricType.PeakSessions => metrics.PeakSessions.ToString(),
+            MetricType.TotalStarted => FormatLargeNumber(metrics.TotalSessionsStarted),
+            MetricType.TotalEnded => FormatLargeNumber(metrics.TotalSessionsEnded),
+            _ => "0"
+        };
+    }
+
+    private string FormatLargeNumber(long number)
+    {
+        if (number >= 1000000)
+            return $"{number / 1000000.0:F1}M";
+        if (number >= 1000)
+            return $"{number / 1000.0:F1}K";
+        return number.ToString();
+    }
+}

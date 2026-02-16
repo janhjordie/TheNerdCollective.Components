@@ -1,0 +1,84 @@
+@using TheNerdCollective.Blazor.SessionMonitor
+@using MudBlazor
+@inject ISessionMonitorService SessionMonitor
+
+<MudStack Spacing="1" Class="@Class">
+    <MudText Typo="@LabelTypo" Color="Color.Secondary">@Label</MudText>
+    <MudText Typo="@ValueTypo" Color="@ValueColor">@CurrentCount</MudText>
+    @if (ShowIcon)
+    {
+        <MudIcon Icon="@Icons.Material.Filled.Cloud" Color="@ValueColor" Size="@IconSize"/>
+    }
+</MudStack>
+
+@code {
+    private int CurrentCount = 0;
+
+    /// <summary>
+    /// Label text to display above the counter.
+    /// </summary>
+    [Parameter]
+    public string Label { get; set; } = "Active Sessions";
+
+    /// <summary>
+    /// Typography size for the label.
+    /// </summary>
+    [Parameter]
+    public Typo LabelTypo { get; set; } = Typo.subtitle2;
+
+    /// <summary>
+    /// Typography size for the value.
+    /// </summary>
+    [Parameter]
+    public Typo ValueTypo { get; set; } = Typo.h4;
+
+    /// <summary>
+    /// Color for the value display.
+    /// </summary>
+    [Parameter]
+    public Color ValueColor { get; set; } = Color.Primary;
+
+    /// <summary>
+    /// Whether to show the icon.
+    /// </summary>
+    [Parameter]
+    public bool ShowIcon { get; set; } = false;
+
+    /// <summary>
+    /// Size of the icon.
+    /// </summary>
+    [Parameter]
+    public Size IconSize { get; set; } = Size.Medium;
+
+    /// <summary>
+    /// Additional CSS classes.
+    /// </summary>
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Event callback when the count changes.
+    /// </summary>
+    [Parameter]
+    public EventCallback<int> OnCountChanged { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    /// <summary>
+    /// Manually refresh the counter.
+    /// </summary>
+    public void Refresh()
+    {
+        var metrics = SessionMonitor.GetCurrentMetrics();
+        var newCount = metrics.ActiveSessions;
+        
+        if (newCount != CurrentCount)
+        {
+            CurrentCount = newCount;
+            OnCountChanged.InvokeAsync(CurrentCount);
+        }
+    }
+}
