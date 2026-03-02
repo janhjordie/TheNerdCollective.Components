@@ -39,6 +39,14 @@
         ...(window.blazorReconnectionConfig || {})
     };
 
+    // Bug-4 fix: expose a runtime config function so CircuitReconnectionHandler.razor
+    // can call configureBlazorReconnection() via JS interop after OnAfterRenderAsync.
+    // Also allows <script>window.blazorReconnectionConfig = {...}</script> pattern.
+    window.configureBlazorReconnection = function(newConfig) {
+        Object.assign(config, newConfig);
+        console.log('[CircuitHandler] Config updated via JS interop:', config);
+    };
+
     console.log('[CircuitHandler] Status overlay initializing with config:', config);
 
     // ===== STATE =====
@@ -48,11 +56,12 @@
     let versionPollTimeout = null;
     let versionBanner = null;
     let reconnectModal = null;
+    let deploymentOverlay = null;  // Bug-3 fix: was referenced but never declared
     let lastKnownStatus = null;
     let isInitialLoad = true;
     let isModifyingDom = false;    // Prevent MutationObserver re-entrancy
     let healthCheckInterval = null; // Health monitor interval
-    let reconnectTimeout = null;   // Timeout to force reload if stuck in reconnect
+    let reconnectTimeout = null;   // Kept for stopReconnectHealthCheck cleanup only
 
     // ===== UTILITY FUNCTIONS =====
     
@@ -256,12 +265,31 @@
         }
     }
 
-    // ===== DEPLOYMENT OVERLAY (DISABLED) =====
-    // Deployment feedback is handled by app's status banner
-    // We do not show overlays during deployment, only on actual circuit loss
-    
+    // ===== DEPLOYMENT OVERLAY =====
+
+    function showDeploymentOverlay(status) {
+        if (deploymentOverlay) return;
+
+        console.log('[CircuitHandler] Showing deployment overlay');
+
+        deploymentOverlay = document.createElement('div');
+        deploymentOverlay.id = 'blazor-deployment-overlay';
+        deploymentOverlay.innerHTML = getDeploymentHtml(status);
+
+        if (config.customCss) {
+            const style = document.createElement('style');
+            style.textContent = config.customCss;
+            deploymentOverlay.appendChild(style);
+        }
+
+        document.body.appendChild(deploymentOverlay);
+    }
+
     function hideDeploymentOverlay() {
-        // No-op: deployment overlays are not shown
+        if (deploymentOverlay) {
+            deploymentOverlay.remove();
+            deploymentOverlay = null;
+        }
     }
 
     // ===== RECONNECT MODAL (enhances Blazor's default) =====
@@ -286,9 +314,6 @@
         document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
             window.location.reload();
         });
-        
-        // Start health check - if server is up but we're stuck, force reload
-        startReconnectHealthCheck();
     }
 
     function hideReconnectModal() {
@@ -298,41 +323,12 @@
         }
         stopReconnectHealthCheck();
     }
-    
-    // Health check during reconnect: if server is responding but modal is stuck, force reload
-    function startReconnectHealthCheck() {
-        if (reconnectTimeout) return;
-        
-        console.log('[CircuitHandler] Starting reconnect health check (10s timeout)');
-        
-        reconnectTimeout = setTimeout(async () => {
-            if (!reconnectModal) return; // Already hidden, no need to check
-            
-            console.log('[CircuitHandler] Checking server health after reconnect timeout...');
-            
-            try {
-                // Check if server is responding
-                const response = await fetch('/_blazor/negotiate?negotiateVersion=1', { 
-                    method: 'POST',
-                    cache: 'no-cache' 
-                });
-                
-                if (response.ok) {
-                    console.log('[CircuitHandler] Server is healthy but circuit stuck - forcing reload');
-                    window.location.reload();
-                } else {
-                    console.log('[CircuitHandler] Server returned', response.status, '- waiting...');
-                    // Try again in 5 seconds
-                    reconnectTimeout = setTimeout(() => startReconnectHealthCheck(), 5000);
-                }
-            } catch (e) {
-                console.log('[CircuitHandler] Server not reachable:', e.message, '- waiting...');
-                // Try again in 5 seconds
-                reconnectTimeout = setTimeout(() => startReconnectHealthCheck(), 5000);
-            }
-        }, 10000); // Wait 10 seconds before first check
-    }
-    
+
+    // No-op: reload is now driven purely by Blazor's components-reconnect-failed class.
+    // The 10s force-reload was removed because it cut short Blazor's own retry window
+    // and caused unnecessary full reloads on mobile (e.g. iPhone returning from background).
+    function startReconnectHealthCheck() { /* intentionally empty */ }
+
     function stopReconnectHealthCheck() {
         if (reconnectTimeout) {
             clearTimeout(reconnectTimeout);
@@ -402,19 +398,23 @@
         const observer = new MutationObserver(async () => {
             // Skip if we're currently modifying DOM ourselves
             if (isModifyingDom) return;
-            
+
             const defaultModal = document.getElementById('components-reconnect-modal');
-            
-            if (defaultModal && !isInitialLoad && !reconnectModal && !deploymentOverlay) {
-                // Blazor's default modal appeared - hide it and show ours
-                console.log('[CircuitHandler] Default reconnect modal detected');
-                
+            if (!defaultModal) return;
+
+            // Blazor signals state via CSS class on #components-reconnect-modal.
+            // It never adds/removes the element — watching childList alone is wrong.
+            const isShowing = defaultModal.classList.contains('components-reconnect-show');
+            const isFailed  = defaultModal.classList.contains('components-reconnect-failed');
+            const isHiding  = defaultModal.classList.contains('components-reconnect-hide');
+
+            if (isShowing && !isInitialLoad && !reconnectModal && !deploymentOverlay) {
+                // Circuit disconnected — suppress Blazor's default UI, show ours
+                console.log('[CircuitHandler] Circuit disconnected, showing custom reconnect UI');
                 isModifyingDom = true;
                 try {
                     defaultModal.style.display = 'none';
-                    
                     const status = await fetchStatus();
-                    
                     if (isDeploying(status)) {
                         showDeploymentOverlay(status);
                     } else {
@@ -423,22 +423,38 @@
                 } finally {
                     isModifyingDom = false;
                 }
-            } else if (!defaultModal && reconnectModal) {
-                // Default modal removed = connection restored
-                // Health check has confirmed server is up, safe to hide
-                console.log('[CircuitHandler] Connection restored, hiding reconnect modal');
-                
+
+            } else if (isFailed && !isInitialLoad) {
+                // Circuit has permanently expired — Blazor cannot recover it
+                console.log('[CircuitHandler] Circuit expired, reloading in 2s');
                 isModifyingDom = true;
                 try {
+                    defaultModal.style.display = 'none';
                     hideReconnectModal();
+                    hideDeploymentOverlay();
+                } finally {
+                    isModifyingDom = false;
+                }
+                setTimeout(() => window.location.reload(), 2000);
+
+            } else if (isHiding && (reconnectModal || deploymentOverlay)) {
+                // Blazor successfully reconnected — restore and hide our overlay
+                console.log('[CircuitHandler] Circuit reconnected, hiding custom UI');
+                isModifyingDom = true;
+                try {
+                    defaultModal.style.display = ''; // let Blazor CSS take over
+                    hideReconnectModal();
+                    hideDeploymentOverlay();
                 } finally {
                     isModifyingDom = false;
                 }
             }
         });
-        
-        observer.observe(document.body, { childList: true, subtree: true });
-        console.log('[CircuitHandler] Watching for Blazor reconnect modal');
+
+        // attributes: true + attributeFilter catches Blazor's class changes on the modal element.
+        // childList: true + subtree: true is retained for any edge-case DOM additions.
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        console.log('[CircuitHandler] Watching for Blazor reconnect modal (class-based)');
     }
     
     // ===== HEALTH MONITOR =====
