@@ -1,11 +1,15 @@
 /**
  * Blazor Server Reconnection Handler
- * TheNerdCollective.Blazor.Reconnect v1.2.0
+ * TheNerdCollective.Blazor.Reconnect v1.5.0
  *
  * Minimal, non-invasive circuit handler that:
  * - Shows a custom reconnect modal when the Blazor circuit is lost
- * - Caps Blazor's default retry window (configurable maxRetries)
- * - Shows a "connection failed" UI when retries are exhausted (no auto-reload loop)
+ * - Phase 1: Blazor circuit retry loop (effectively infinite — maxRetries=1000)
+ * - Phase 2: server-alive ping starts IN PARALLEL after serverPingStartDelayMs
+ *            (default 3s = one retry interval). Uses AbortController to cancel
+ *            any in-flight fetch the instant Blazor reconnects the circuit.
+ *            circuitReconnected guard prevents reload if hide() fires just
+ *            before a ping response lands.
  * - Polls Blazor's reconnect state every 250ms (reliable, no MutationObserver races)
  * - Re-hooks Blazor's reconnectionHandler every 5s so it survives server restarts
  * - Suppresses noisy console errors during disconnection
@@ -34,18 +38,31 @@
         logoUrl: null,         // URL to a logo shown above the spinner (e.g. '/_content/MyApp/logo.png')
         spinnerUrl: null,      // URL to a custom spinner image — replaces the SVG spinner
 
-        // Reconnect behaviour
-        maxRetries: 8,                    // Max reconnect attempts before showing "failed" state (overrides Blazor default of ~100)
-        retryIntervalMilliseconds: 3000,  // ms between each retry attempt
+        // Phase 1: circuit retry behaviour (effectively infinite — Phase 2 is the real exit)
+        maxRetries: 1000,                 // Effectively infinite: Phase 2 (server ping) triggers reload, not retry exhaustion
+        retryIntervalMilliseconds: 3000,  // ms between each Phase 1 retry attempt
+
+        // Phase 2: server-alive polling — starts IN PARALLEL with Phase 1 after a short delay.
+        // If the server responds while Phase 1 is still running, reload immediately.
+        serverPingEnabled: true,
+        serverPingUrl: '/health',                   // Any 2xx response triggers reload
+        serverPingStartDelayMilliseconds: 3000,     // Start pinging after 1 failed retry (3s = retryIntervalMilliseconds).
+                                                    // This is safe because stopServerPing() uses AbortController to
+                                                    // cancel any in-flight fetch if Blazor reconnects the circuit.
+        serverPingIntervalMilliseconds: 5000,       // ms between ping attempts
+        autoReloadOnServerBack: true,               // true = auto-reload; false = show a prompt
 
         // Text labels — override for localisation or branding
         title: 'Connection lost',
         subtitle: 'The connection was interrupted. Attempting to reconnect\u2026',
         statusText: 'Reconnecting\u2026',
         reloadButtonText: 'Reload now',
-        failedTitle: 'Unable to reconnect',
-        failedSubtitle: 'The connection to the server could not be restored.',
+        failedTitle: 'Waiting for server\u2026',
+        failedSubtitle: 'The connection was lost. Checking server availability\u2026',
         failedReloadButtonText: 'Reload page',
+        serverBackTitle: 'Server is available!',
+        serverBackManualSubtitle: 'The server is back online.',
+        serverBackManualButtonText: 'Reload now',
 
         // Styling
         customCss: null,       // Inline CSS string injected into the modal
@@ -62,12 +79,21 @@
 
     console.log('[BlazorReconnect] Initializing with config:', config);
 
+    const VERSION = 'v1.5.1';
+
     // ===== STATE =====
     let reconnectModal = null;
     let isInitialLoad = true;
     let retryAttempt = 0;
     let retryCountdownSecs = 0;
     let retryTimer = null;
+
+    // Phase 2 state
+    let serverPingTimer = null;
+    let serverPingStartTimer = null;  // delayed start timer
+    let serverPingAttempt = 0;
+    let serverPingAbortController = null;  // cancels in-flight fetch when circuit reconnects
+    let circuitReconnected = false;        // guard: prevents reload if hide() fires just as ping resolves
 
     // ===== UI COMPONENTS =====
     
@@ -107,6 +133,7 @@
                                    padding: 0.5rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 0.95rem;'>
                         ${config.reloadButtonText}
                     </button>
+                    <p style='margin: 1rem 0 0; color: #ccc; font-size: 0.7rem;'>${VERSION}</p>
                 </div>
             </div>
             <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
@@ -116,6 +143,45 @@
     function getFailedHtml() {
         if (config.failedHtml) return config.failedHtml;
 
+        // Phase 2 active (default): amber pulsing icon + status line.
+        // NOT the red-X dead-end screen — we are still actively working.
+        if (config.serverPingEnabled) {
+            const pulseIcon = `
+                <svg style="width: 48px; height: 48px; margin: 0 auto 1rem; display: block;
+                            animation: ping-pulse 1.5s ease-in-out infinite;" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="#F59E0B" stroke-width="2.5"/>
+                    <circle cx="12" cy="12" r="4" fill="#F59E0B"/>
+                </svg>`;
+
+            return `
+                <div style='position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                            background: rgba(0, 0, 0, 0.7); z-index: 9999;
+                            display: flex; align-items: center; justify-content: center;'>
+                    <div style='background: white; padding: 2rem; border-radius: 8px;
+                                max-width: 400px; width: 90%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                        ${createLogoHtml()}
+                        ${pulseIcon}
+                        <h3 id='blazor-ping-title' style='margin: 0 0 0.5rem; color: #333; font-size: 1.25rem;'>${config.failedTitle}</h3>
+                        <p id='blazor-ping-subtitle' style='margin: 0 0 0.25rem; color: #666; font-size: 0.95rem;'>${config.failedSubtitle}</p>
+                        <p id='blazor-ping-status' style='margin: 0 0 1.25rem; color: #999; font-size: 0.8rem;'>Checking\u2026</p>
+                        <button id='manual-reload-btn'
+                                style='background: ${config.primaryColor}; color: white; border: none;
+                                       padding: 0.6rem 2rem; border-radius: 4px; cursor: pointer; font-size: 1rem; font-weight: 500;'>
+                            ${config.failedReloadButtonText}
+                        </button>
+                        <p style='margin: 1rem 0 0; color: #ccc; font-size: 0.7rem;'>${VERSION}</p>
+                    </div>
+                </div>
+                <style>
+                    @keyframes ping-pulse {
+                        0%, 100% { opacity: 1; transform: scale(1); }
+                        50%       { opacity: 0.5; transform: scale(0.88); }
+                    }
+                </style>
+            `;
+        }
+
+        // Phase 2 disabled: legacy static dead-end UI
         const errorIcon = `
             <svg style="width: 48px; height: 48px; margin: 0 auto 1rem; display: block;" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" fill="none" stroke="#e53e3e" stroke-width="2.5"/>
@@ -143,15 +209,120 @@
         `;
     }
 
-    // ===== RECONNECT MODAL =====
-    
+    // ===== PHASE 2: SERVER PING =====
+
+    function updatePingStatus() {
+        const el = document.getElementById('blazor-ping-status');
+        if (el) el.textContent = 'Checking server availability\u2026';
+    }
+
+    function showServerBackPrompt() {
+        // autoReloadOnServerBack = false: update the modal to tell the user the server is back
+        const title    = document.getElementById('blazor-ping-title');
+        const subtitle = document.getElementById('blazor-ping-subtitle');
+        const status   = document.getElementById('blazor-ping-status');
+        const btn      = document.getElementById('manual-reload-btn');
+        if (title)    title.textContent = config.serverBackTitle;
+        if (subtitle) subtitle.textContent = config.serverBackManualSubtitle;
+        if (status)   status.textContent = '';
+        if (btn)      btn.textContent = config.serverBackManualButtonText;
+    }
+
+    function stopServerPing(circuitRestored = false) {
+        // Abort any in-flight fetch immediately so it cannot trigger a reload
+        // after Blazor has already reconnected the circuit.
+        if (serverPingAbortController) {
+            serverPingAbortController.abort();
+            serverPingAbortController = null;
+        }
+        if (serverPingStartTimer) {
+            clearTimeout(serverPingStartTimer);
+            serverPingStartTimer = null;
+        }
+        if (serverPingTimer) {
+            clearInterval(serverPingTimer);
+            serverPingTimer = null;
+        }
+        serverPingAttempt = 0;
+        if (circuitRestored) {
+            circuitReconnected = true;
+            console.log('[BlazorReconnect] Phase 2 aborted — circuit was restored by Blazor');
+        }
+    }
+
+    function startServerPing(delayMs) {
+        if (!config.serverPingEnabled) {
+            console.log('[BlazorReconnect] Phase 2 disabled (serverPingEnabled=false)');
+            return;
+        }
+        stopServerPing();
+        circuitReconnected = false;
+        serverPingAttempt = 0;
+
+        const delay = delayMs ?? 0;
+
+        const begin = () => {
+            serverPingStartTimer = null;
+            console.log(`[BlazorReconnect] Phase 2 started — polling ${config.serverPingUrl} every ${config.serverPingIntervalMilliseconds}ms indefinitely`);
+
+            serverPingTimer = setInterval(async () => {
+                // Belt-and-suspenders: if circuit was restored since last tick, stop
+                if (circuitReconnected) { stopServerPing(); return; }
+
+                serverPingAttempt++;
+                updatePingStatus();
+
+                // Fresh AbortController per tick so stopServerPing() can cancel it
+                serverPingAbortController = new AbortController();
+                try {
+                    const resp = await fetch(config.serverPingUrl, {
+                        cache: 'no-store',
+                        signal: serverPingAbortController.signal
+                    });
+                    serverPingAbortController = null;
+
+                    // Double-check: did Blazor reconnect the circuit while we were waiting?
+                    if (circuitReconnected) {
+                        console.log('[BlazorReconnect] Phase 2 ping resolved but circuit was already restored — skipping reload');
+                        return;
+                    }
+
+                    if (resp.ok) {
+                        stopServerPing();
+                        console.log(`[BlazorReconnect] Phase 2: server responded (${resp.status}) after ${serverPingAttempt} attempt(s)`);
+                        if (config.autoReloadOnServerBack) {
+                            console.log('[BlazorReconnect] Auto-reloading page');
+                            window.location.reload();
+                        } else {
+                            console.log('[BlazorReconnect] Showing "server is back" prompt (autoReloadOnServerBack=false)');
+                            showServerBackPrompt();
+                        }
+                    }
+                } catch (err) {
+                    serverPingAbortController = null;
+                    if (err.name === 'AbortError') {
+                        // Cancelled by stopServerPing() — circuit reconnected, do nothing
+                    }
+                    // Server still unreachable — keep polling silently
+                }
+            }, config.serverPingIntervalMilliseconds);
+        };
+
+        if (delay > 0) {
+            console.log(`[BlazorReconnect] Phase 2 scheduled to start in ${delay}ms`);
+            serverPingStartTimer = setTimeout(begin, delay);
+        } else {
+            begin();
+        }
+    }
+
     // ===== RETRY COUNTDOWN =====
 
     function updateRetryStatus() {
         const el = document.getElementById('blazor-reconnect-status');
         if (!el) return;
-        const countdown = retryCountdownSecs > 0 ? ` \u00b7 Retrying in ${retryCountdownSecs}s` : ' \u00b7 Retrying\u2026';
-        el.textContent = `Attempt ${retryAttempt} / ${config.maxRetries}${countdown}`;
+        const countdown = retryCountdownSecs > 0 ? `Retrying in ${retryCountdownSecs}s\u2026` : 'Retrying\u2026';
+        el.textContent = countdown;
     }
 
     function startRetryCountdown() {
@@ -221,21 +392,32 @@
         });
 
         startRetryCountdown();
+
+        // Phase 2: start server ping after a short delay IN PARALLEL with Phase 1.
+        // Reset the circuit-restored guard so a stale true from a previous disconnect cycle
+        // cannot suppress the next reload. AbortController ensures any in-flight fetch from
+        // the previous cycle is already cancelled before this point.
+        circuitReconnected = false;
+        startServerPing(config.serverPingStartDelayMilliseconds);
     }
 
     function hideReconnectModal() {
         if (reconnectModal) {
             console.log('[BlazorReconnect] Connection restored, hiding modal');
             stopRetryCountdown();
+            // Pass circuitRestored=true: sets circuitReconnected=true AND aborts any in-flight
+            // Phase 2 fetch so it cannot trigger a reload after the circuit is back.
+            stopServerPing(true);
             reconnectModal.remove();
             reconnectModal = null;
         }
     }
 
     function showFailedModal() {
-        console.log('[BlazorReconnect] Showing failed UI — user must reload manually');
+        const phase2Active = config.serverPingEnabled;
+        console.log(`[BlazorReconnect] Phase 1 exhausted — switching to ${phase2Active ? 'Phase 2 (server ping)' : 'static failed'} UI`);
         stopRetryCountdown();
-        // Replace reconnecting modal (if present) with the failed state
+        // Replace reconnecting modal (if present) with the Phase 2 / failed state
         if (reconnectModal) {
             reconnectModal.remove();
             reconnectModal = null;
@@ -249,6 +431,12 @@
         document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
             window.location.reload();
         });
+
+        // If Phase 2 is already running (started in parallel during Phase 1), keep it going.
+        // If not yet started (e.g. serverPingStartDelayMs was longer than Phase 1), start it now.
+        if (!serverPingTimer && !serverPingStartTimer) {
+            startServerPing(0);
+        }
     }
 
     // ===== PRIMARY: Blazor reconnection handler hook =====
@@ -467,14 +655,18 @@
                 isInitialLoad,
                 hooked,
                 circuitState: getCircuitState(),
-                reconnectModalEl: !!document.getElementById('components-reconnect-modal')
+                reconnectModalEl: !!document.getElementById('components-reconnect-modal'),
+                serverPingActive: !!serverPingTimer,
+                serverPingAttempt
             });
         },
         showModal: () => showReconnectModal(),
-        hideModal: () => hideReconnectModal()
+        hideModal: () => hideReconnectModal(),
+        showFailedModal: () => showFailedModal(),   // test Phase 2 directly
+        stopServerPing: () => stopServerPing()
     };
 
-    console.log('[BlazorReconnect] Testing API: BlazorReconnect.status(), .showModal(), .hideModal()');
+    console.log('[BlazorReconnect] Testing API: BlazorReconnect.status(), .showModal(), .hideModal(), .showFailedModal(), .stopServerPing()');
 
     // ===== INITIALIZATION =====
 

@@ -1,7 +1,9 @@
 # Reconnection Requirements & Behaviour Specification
 
 **Package**: `TheNerdCollective.Blazor.Reconnect`  
-**Last updated**: 2026-03-02
+**Last updated**: 2026-03-02 | **Current version**: `1.5.0`
+
+> **Core principle**: The component must **never permanently give up**. Showing a dead "Unable to reconnect" screen while the server is running is unacceptable. The reconnect handler operates in two phases: (1) try to resume the circuit, (2) if the circuit is gone, poll until the server is reachable and then reload automatically.
 
 ---
 
@@ -18,19 +20,38 @@ Browser connects → circuit created (ID assigned)
 Connection lost (network drop, app backgrounded, server restart…)
         │
         ▼
-Blazor enters reconnect loop (retries × interval)
-        │
-   ┌────┴──────────────┐
-   │                   │
-   ▼                   ▼
-Reconnect succeeds   Retries exhausted
-(circuit still alive  (circuit expired OR server restarted)
- on server)
-   │                   │
-   ▼                   ▼
-Resume seamlessly   failed() fired → show failed UI → user reloads
-(no state lost)     (new circuit created after reload)
+╔══════════════════════════════╗     starts 3s after disconnect
+║  PHASE 1: Circuit retry loop ║ ══════════════════════════════════╗
+║  (maxRetries=1000, ≈ ∞)      ║     ╔══════════════════════════════════════╗
+╚══════════════════════════════╝     ║  PHASE 2: Server-alive ping loop      ║
+        │                            ║  runs IN PARALLEL with Phase 1        ║
+   ┌────┴──────────────┐             ║  (polls indefinitely every 5s)        ║
+   │                   │             ╚══════════════════════════════════════╝
+   ▼                   ▼                      │
+Reconnect succeeds   Circuit dead        ┌────┴────────────────┐
+(circuit alive)      → Phase 1 keeps    │                     │
+   │                   retrying     Server down          Server responds
+   ▼                                → keep pinging       → auto-reload
+hide() fires                                                   │
+→ circuitReconnected=true                            window.location.reload()
+→ AbortController.abort()                            (new circuit starts)
+→ stopServerPing() cancels Phase 2
 ```
+
+Key point: **Phase 2 starts 3 seconds after disconnect** (`serverPingStartDelayMilliseconds`), not after Phase 1 exhausts.
+- If Blazor reconnects the circuit within 3s → `hide()` fires → sets `circuitReconnected = true` + `AbortController.abort()` cancels the Phase 2 timer before it fires (brief blip, no reload)
+- If the circuit is dead → Phase 2 is already pinging well before Phase 1 even notices
+- `maxRetries=1000` makes Phase 1 effectively infinite — Phase 2 is the sole exit mechanism when the circuit is gone
+
+#### Why 3 seconds is safe — AbortController + `circuitReconnected` guard
+
+The short 3s delay is made safe by two mechanisms working together:
+
+1. **`AbortController`**: Each `fetch()` call in Phase 2 is given the signal of a fresh `AbortController`. When `hide()` fires (Blazor circuit reconnected), `stopServerPing(circuitRestored=true)` calls `controller.abort()`, instantly cancelling any in-flight request. The `AbortError` is silently swallowed.
+
+2. **`circuitReconnected` flag**: Even if a Phase 2 response arrives after `abort()` (race condition — extremely unlikely), the handler checks `if (circuitReconnected) return` before calling `window.location.reload()`. Belt-and-suspenders.
+
+> **Why not use sessionStorage?** Blazor Server's circuit reconnect token is **not** stored in `sessionStorage` in any accessible or documented form. It is internal to the SignalR `HubConnection` — not observable from application JS. The only `sessionStorage` key found in `blazor.web.js` is a WASM authentication key, unrelated to Server circuit reconnect. `AbortController` is the correct and sufficient mechanism.
 
 ### Server-side circuit lifetime
 
@@ -69,17 +90,22 @@ If the window expires → the circuit is garbage-collected → reconnect attempt
 | > ~3 min | Reconnect modal appears → retries exhaust → **failed UI** shown with "Reload page" button. User must reload; a new circuit starts. |
 
 **Requirements**:
-- [ ] Reconnect modal **must appear immediately** when the user returns to the tab (within the 1s polling interval).
-- [ ] If reconnect succeeds, modal **must disappear** without user interaction.
-- [ ] If retries exhaust, modal **must switch to the failed state** — do NOT auto-reload (the server may still be unreachable).
-- [ ] `maxRetries` and `retryIntervalMilliseconds` must be configurable so the total retry window can be tuned to match `DisconnectedCircuitRetentionPeriod`.
+- [x] Reconnect modal **must appear immediately** when the user returns to the tab (within the 1s polling interval).
+- [x] If reconnect succeeds, modal **must disappear** without user interaction.
+- [x] If retries exhaust (Phase 1 ends), modal **must switch to the "server polling" state** — NOT a permanent dead-end "Unable to reconnect" screen.
+- [x] In Phase 2 (server polling), the component polls a configurable endpoint (default `/health`) at a configurable interval and **auto-reloads** when it gets a successful response.
+- [x] The "failed" UI must update to communicate "Still trying to reach the server…" rather than implying the situation is permanent.
+- [x] `maxRetries` and `retryIntervalMilliseconds` must be configurable so the total Phase 1 window can be tuned to match `DisconnectedCircuitRetentionPeriod`.
+- [x] Phase 2 polling must also be configurable and must default to **enabled**.
 
 **Recommended alignment**:
 ```
-DisconnectedCircuitRetentionPeriod = 3 min
-maxRetries = 8, retryIntervalMilliseconds = 3000  →  total ~24s retry window
+maxRetries = 1000 (≈ infinite)          →  Phase 1 never stops by itself
+serverPingStartDelayMilliseconds = 3000 →  Phase 2 starts 3s after disconnect (safe: AbortController cancels if Blazor reconnects first)
+serverPingIntervalMilliseconds = 5000   →  Phase 2 checks every 5s, indefinitely
 ```
-This keeps the retry window short. If 24s is not enough, increase `maxRetries`.
+The Phase 1 window should be long enough to survive a brief network blip or slow server restart,
+but short enough that the component quickly enters Phase 2 and starts polling if the server is down.
 
 ---
 
@@ -108,16 +134,16 @@ This keeps the retry window short. If 24s is not enough, increase `maxRetries`.
 - When the server is back, Blazor reconnects the SignalR transport, but the circuit no longer exists on the server.
 - Blazor calls `failed()` after all retries are exhausted.
 
-**Expected behaviour**:
-- [ ] Reconnect modal appears immediately after the server stops.
-- [ ] Retries run (developer waits for the server to restart).
-- [ ] If the server comes back **within the retry window**, BUT the circuit is dead, the `failed()` path must trigger.
-  - Note: Blazor will successfully reconnect the SignalR transport, then immediately fail the circuit negotiation → `failed()` is correct here.
-- [ ] Failed modal appears → developer reloads → fresh circuit starts.
+**Expected behaviour** (this is the canonical driver for Phase 2 behaviour):
+- [x] Reconnect modal appears immediately after the server stops.
+- [x] Phase 1 retries run while the developer waits for the server to restart.
+- [x] If the server comes back **within the Phase 1 retry window**, BUT the circuit is dead, `failed()` fires (correct — Blazor reconnects the transport, then immediately fails circuit negotiation).
+- [x] Whether `failed()` fires during or after Phase 1, **Phase 2 polling starts immediately**.
+- [x] Phase 2 polls the server (e.g. `GET /health`) until a `2xx` response is received.
+- [x] On success: **auto-reload the page** — developer gets a fresh circuit without any manual interaction.
+- [x] The UI during Phase 2 must NOT say "Unable to reconnect" (implying permanent failure). Instead: "Server is restarting — will reload automatically…" or similar.
 
-**Known issue**: When `maxRetries` is small (e.g., 8), the retry window may close before the server has restarted after a recompile. The developer then sees the failed UI and manually reloads, which is the correct and expected behaviour in local dev.
-
-**Optional future enhancement**: During local dev (`ASPNETCORE_ENVIRONMENT=Development`), the app could expose a `/health` endpoint. The failed modal could poll it and show a "Server is back — reload?" prompt automatically.
+**This is the scenario that must work**: the developer restarts their app and the browser tab recovers on its own.
 
 ---
 
@@ -126,9 +152,11 @@ This keeps the retry window short. If 24s is not enough, increase `maxRetries`.
 **Trigger**: User loses WiFi and the device switches to mobile data, or there is a brief complete outage.
 
 **Expected behaviour**:
-- [ ] Reconnect modal appears when SignalR drops.
-- [ ] If network is restored and circuit is still alive → auto-hide on successful reconnect.
-- [ ] If network outage was long enough to expire the circuit → failed modal.
+- [x] Reconnect modal appears when SignalR drops.
+- [x] If network is restored and circuit is still alive → auto-hide on successful reconnect.
+- [x] If network outage was long enough to expire the circuit → Phase 1 exhausted → Phase 2 starts.
+- [x] Phase 2 polls the health endpoint. Once reachable → auto-reload.
+- [x] **The component must never sit permanently on a dead "Unable to reconnect" screen** while the server is reachable.
 
 ---
 
@@ -200,43 +228,65 @@ There is no action we can take to "reconnect to a specific circuit" from the cli
 
 | Option | Default | Description |
 |---|---|---|
-| `maxRetries` | `8` | Max retry attempts before `failed()` fires. Cap on Blazor's default. |
-| `retryIntervalMilliseconds` | `3000` | ms between attempts. `maxRetries × interval` = total retry window. |
-| `title` | `Connection lost` | Reconnecting modal heading. |
-| `subtitle` | `The connection was interrupted…` | Reconnecting modal body text. |
-| `statusText` | `Reconnecting…` | Reconnecting modal sub-status. |
-| `reloadButtonText` | `Reload now` | Button label in reconnecting modal. |
-| `failedTitle` | `Unable to reconnect` | Failed modal heading. |
-| `failedSubtitle` | `The connection to the server could not be restored.` | Failed modal body. |
-| `failedReloadButtonText` | `Reload page` | Button label in failed modal. |
+| `maxRetries` | `1000` | Effectively infinite Phase 1 retries. Phase 2 (server ping) is now the sole exit when the circuit is dead. |
+| `retryIntervalMilliseconds` | `3000` | ms between Phase 1 retry attempts. |
+| `serverPingEnabled` | `true` | Enable Phase 2 parallel ping. |
+| `serverPingUrl` | `/health` | URL polled in Phase 2. Any `2xx` response triggers auto-reload. |
+| `serverPingStartDelayMilliseconds` | `3000` | ms after disconnect before Phase 2 polling begins. Reduced from 10s to 3s (one Phase 1 retry interval) because `AbortController` + `circuitReconnected` guard make it safe to start Phase 2 early — if Blazor reconnects the circuit, the in-flight fetch is aborted instantly and a guard flag blocks any reload. |
+| `serverPingIntervalMilliseconds` | `5000` | ms between Phase 2 poll attempts. Polls indefinitely. |
+| `autoReloadOnServerBack` | `true` | Auto-reload when Phase 2 ping succeeds. If `false`, show a "Server is back" prompt instead. |
+| `title` | `Connection lost` | Reconnecting modal heading (Phase 1). |
+| `subtitle` | `The connection was interrupted…` | Reconnecting modal body text (Phase 1). |
+| `statusText` | `Reconnecting…` | Reconnecting modal sub-status (Phase 1). |
+| `reloadButtonText` | `Reload now` | Button label in Phase 1 modal. |
+| `failedTitle` | `Waiting for server…` | Phase 2 modal heading. **Must NOT say "Unable to reconnect"** — that implies permanent failure. |
+| `failedSubtitle` | `The connection was lost. Waiting for the server to become available…` | Phase 2 modal body. |
+| `failedReloadButtonText` | `Reload page` | Manual reload button label in Phase 2 modal (always shown as fallback). |
 | `logoUrl` | `null` | Logo URL shown above spinner/error icon. |
 | `primaryColor` | `#594AE2` | Button and spinner colour. |
-| `reconnectingHtml` | `null` | Full HTML override for the reconnecting state. |
-| `failedHtml` | `null` | Full HTML override for the failed state. |
+| `reconnectingHtml` | `null` | Full HTML override for Phase 1 state. |
+| `failedHtml` | `null` | Full HTML override for Phase 2 state. |
 
 ### Tuning the retry window to match server idle timeout
 
 ```js
-// 3-minute server idle timeout (DisconnectedCircuitRetentionPeriod)
-// Keep retry window short — let the failed UI appear fast if server is gone.
-// If server is reachable but circuit is dead, failed() fires immediately anyway.
+// Recommended production config (defaults — no config needed unless overriding):
+// Phase 1: retry forever in background
+// Phase 2: start pinging 3s after disconnect; AbortController cancels it if Blazor reconnects first
 window.blazorReconnectConfig = {
-    maxRetries: 8,                    // 8 × 3s = 24s total retry window
-    retryIntervalMilliseconds: 3000
+    maxRetries: 1000,                       // ≈ infinite
+    retryIntervalMilliseconds: 3000,
+    serverPingEnabled: true,
+    serverPingUrl: '/health',
+    serverPingStartDelayMilliseconds: 3000, // 3s — safe due to AbortController + circuitReconnected guard
+    serverPingIntervalMilliseconds: 5000,
+    autoReloadOnServerBack: true
 };
 
-// For local dev where you want to wait for a slow recompile:
+// If you want a manual "Server is back — reload?" prompt instead of auto-reload:
 window.blazorReconnectConfig = {
-    maxRetries: 30,                   // 30 × 4s = 2 min — enough for most recompiles
-    retryIntervalMilliseconds: 4000
+    autoReloadOnServerBack: false
+};
+
+// Even shorter grace period (e.g. local dev — server restarts fast):
+window.blazorReconnectConfig = {
+    serverPingStartDelayMilliseconds: 1000,  // start pinging after 1s
+    serverPingIntervalMilliseconds: 2000
 };
 ```
 
 ---
 
+## Hard Requirements (must implement)
+
+- [x] **Phase 2 server-alive poll in parallel with Phase 1** (`serverPingEnabled`, `serverPingUrl`, `serverPingStartDelayMilliseconds`, `serverPingIntervalMilliseconds`): Phase 2 starts 3s after disconnect — in parallel with Phase 1, not after it. `AbortController` cancels in-flight fetches the instant `hide()` fires; `circuitReconnected` flag provides a belt-and-suspenders guard. Auto-reloads when server responds.
+- [x] **Rename / rethink the "failed" state UI**: The default copy for Phase 2 must NOT say "Unable to reconnect". Default: "Waiting for server…" / "Checking server availability…"
+- [x] **`autoReloadOnServerBack`** (default `true`): When Phase 2 ping succeeds, reload without user interaction.
+- [x] **`maxRetries` effectively infinite** (`1000`): Phase 1 never stops on its own — Phase 2 is the sole exit when the circuit is dead.
+
 ## Open Questions / Future Work
 
-- [ ] **Dev environment "server is back" detection**: In `Development`, poll a `/health` endpoint from the failed modal and offer an auto-reload when the server responds. Config option: `autoRetryAfterFailedMs` (e.g. 5000) to re-attempt after the failed state.
-- [ ] **Expose `onReconnecting` / `onReconnected` / `onFailed` JS callbacks** so host apps can add custom telemetry or analytics.
+- [ ] **Expose `onReconnecting` / `onReconnected` / `onFailed` / `onServerBack` JS callbacks** so host apps can add custom telemetry or analytics.
 - [ ] **Persist `circuitId` server-side** (via `CircuitHandler`) for session continuity diagnostics — log when a circuit is resumed vs. when a new one is created.
-- [ ] **iOS PWA / Home Screen apps**: When added to the iOS home screen, the app runs in a standalone WebView. The backgrounding behaviour is more aggressive. Needs testing.
+- [ ] **iOS PWA / Home Screen apps**: When added to the iOS home screen, the app runs in a standalone WebView. The backgrounding behaviour is more aggressive. Phase 2 is especially important here. Needs testing.
+- [ ] **Phase 2 with no `/health` endpoint**: Consider falling back to polling the app root (`/`) or a signalr negotiate endpoint if `/health` is not available.
