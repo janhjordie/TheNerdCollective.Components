@@ -5,6 +5,9 @@ A lightweight, project-agnostic Blazor Server circuit reconnection handler. Work
 ## Features
 
 ✅ **Zero config** — drop in one `<script>` tag and it just works  
+✅ **Silent grace period** — no flash of reconnect UI on brief hiccups or quick wakes (configurable, default 500ms)  
+✅ **Rapid-first backoff** — first retry is instant, then gradually backs off; matches Blazor's built-in strategy  
+✅ **iOS/mobile aware** — handles screen lock, bfcache, and tab freeze correctly (see [iOS behaviour](#ios--mobile-behaviour))  
 ✅ **Project-agnostic** — neutral English defaults, all text is configurable  
 ✅ **Custom branding** — add your logo, brand colour, and CSS in seconds  
 ✅ **Non-invasive** — Blazor starts normally, no `autostart="false"` required  
@@ -46,23 +49,98 @@ That's it. A clean "Connection lost" modal will appear whenever the circuit drop
 ## How It Works
 
 ```
+ Connection drops
+       │
+       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     Connection Lost                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Primary: Blazor.defaultReconnectionHandler hook            │
-│  · Blazor calls show() → custom modal appears               │
-│  · Blazor calls hide() → custom modal disappears            │
-│  · Blazor calls failed() → reload after 2s                  │
-│                                                             │
-│  Fallback (if hook unavailable): DOM class polling          │
-│  · Polls #components-reconnect-modal class every 250ms      │
-│  · components-reconnect-show    → show modal                │
-│  · components-reconnect-hide    → hide modal                │
-│  · components-reconnect-failed  → reload after 2s           │
-│                                                             │
+│  Grace period (default 500ms)                               │
+│  Blazor retries silently in background.                     │
+│  If hide() fires → timer cancelled, user sees nothing. ✅   │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ timer expires
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Phase 1 — Circuit retry loop (rapid-first backoff)         │
+│  · Retry at: 0ms, 500ms, 1s, 2s, 3s, 5s, 10s, 15s, 20s…   │
+│  · Modal shown with countdown                               │
+│  · hide() fires → modal dismissed, all timers cancelled     │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ in parallel after 3s
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Phase 2 — Server-alive ping (parallel with Phase 1)        │
+│  · Polls /health every 5s                                   │
+│  · 2xx response → auto-reload (server is back)              │
+│  · AbortController cancels in-flight fetch if circuit       │
+│    reconnects during a ping                                 │
 └─────────────────────────────────────────────────────────────┘
+
+ Primary hook: Blazor.defaultReconnectionHandler._reconnectionDisplay
+   · show()   → scheduleShowReconnectModal() (respects grace period)
+   · hide()   → hideReconnectModal() (cancels grace period if active)
+   · failed() → showFailedModal() (Phase 2 UI)
+
+ Fallback: DOM class polling every 250ms
+   · components-reconnect-show   → show
+   · components-reconnect-hide   → hide
+   · components-reconnect-failed → Phase 2 UI
 ```
+
+---
+
+## iOS / Mobile Behaviour
+
+On **iOS Safari**, JavaScript is frozen when the user locks the screen or switches apps. The WebSocket (SignalR) is silently dropped by the OS. When the user returns to the browser, JS resumes — but what happens next depends on how long the screen was locked:
+
+### Scenario A — Short lock (< ~60s, no memory pressure)
+
+iOS freezes JS but keeps the WKWebView alive. When the user returns:
+1. `visibilitychange` fires (`document.visibilityState === 'visible'`)
+2. This library immediately calls **`Blazor.reconnect()`** in parallel with a health ping
+3. If the circuit is still alive on the server, reconnect resolves in ~200–500ms
+4. The grace period absorbs the reconnect — **the user sees no modal at all**
+
+### Scenario B — Long lock or memory pressure (the common case)
+
+iOS kills the WKWebView process entirely to reclaim memory. This typically happens after 1–3 minutes, or sooner on older/low-memory devices. When the user returns to Safari:
+
+- The browser performs a **full page navigation (reload)** — it is not a reconnect
+- Blazor starts fresh with a new circuit
+- The reconnect handler is never involved — the page simply loads from scratch as normal
+
+> **This is why it "always feels like a reload" on iPhone.** It is one — and that is correct behaviour. There is no circuit to recover. The OS made that decision, not the browser or Blazor.
+
+There is nothing a reconnect handler can do about Scenario B. The only mitigation is preserving user state across page loads (e.g. URL state, `localStorage`, server-side session).
+
+### Scenario C — bfcache (back/forward swipe navigation)
+
+If the user navigates away and back using Safari's swipe gestures, the page may be restored from the **back-forward cache (bfcache)**. The page appears instantly, but all Blazor state is dead-on-arrival (the SignalR connection no longer exists).
+
+This library handles this with the `pageshow` event:
+
+```javascript
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) window.location.reload();
+});
+```
+
+A persisted `pageshow` triggers an immediate reload so the user gets a fully working circuit.
+
+### How fast can Blazor Server reconnect?
+
+When a reconnect is possible (Scenario A), the process requires:
+1. Re-establish the WebSocket handshake
+2. `ConnectCircuit` server invocation — validates the circuit is still alive in server memory
+
+**Total: ~200–500ms on a good connection.** The server-side circuit stays alive for the `DisconnectedCircuitRetentionPeriod` (default: 3 minutes). If the circuit has expired, `ConnectCircuit` returns `false`, Blazor calls `failed()`, and Phase 2 triggers a reload.
+
+### Summary table
+
+| Scenario | iOS action | Library response |
+|---|---|---|
+| Short lock (< ~60s) | JS frozen, WKWebView alive | `visibilitychange` → `Blazor.reconnect()` + ping → silent recovery |
+| Long lock / memory pressure | WKWebView killed | Full page reload by Safari — circuit starts fresh |
+| bfcache (swipe back/forward) | Page restored from cache | `pageshow` persisted → forced `location.reload()` |
 
 ---
 
@@ -168,9 +246,13 @@ window.blazorReconnectConfig = {
 Open browser DevTools console:
 
 ```javascript
-BlazorReconnect.showModal()   // Force show the modal
-BlazorReconnect.hideModal()   // Force hide the modal
-BlazorReconnect.status()      // Log current state
+BlazorReconnect.status()         // Log full current state (modal, grace period, pings…)
+BlazorReconnect.showModal()      // Trigger modal with grace period (as if circuit dropped)
+BlazorReconnect.showModalNow()   // Show modal immediately, bypassing grace period
+BlazorReconnect.hideModal()      // Dismiss modal (as if circuit reconnected)
+BlazorReconnect.showFailedModal() // Jump straight to Phase 2 (server ping) UI
+BlazorReconnect.stopServerPing() // Stop the Phase 2 ping loop
+BlazorReconnect.immediatePing()  // Simulate a visibility-restore health check
 ```
 
 ---
