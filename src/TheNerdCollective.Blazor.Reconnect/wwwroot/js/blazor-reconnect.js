@@ -1,11 +1,13 @@
 /**
  * Blazor Server Reconnection Handler
- * TheNerdCollective.Blazor.Reconnect v1.1.0
+ * TheNerdCollective.Blazor.Reconnect v1.2.0
  *
  * Minimal, non-invasive circuit handler that:
  * - Shows a custom reconnect modal when the Blazor circuit is lost
+ * - Caps Blazor's default retry window (configurable maxRetries)
+ * - Shows a "connection failed" UI when retries are exhausted (no auto-reload loop)
  * - Polls Blazor's reconnect state every 250ms (reliable, no MutationObserver races)
- * - Auto-reloads on permanent circuit expiry (components-reconnect-failed)
+ * - Re-hooks Blazor's reconnectionHandler every 5s so it survives server restarts
  * - Suppresses noisy console errors during disconnection
  * - Works out of the box with sensible defaults — fully customisable
  *
@@ -32,11 +34,18 @@
         logoUrl: null,         // URL to a logo shown above the spinner (e.g. '/_content/MyApp/logo.png')
         spinnerUrl: null,      // URL to a custom spinner image — replaces the SVG spinner
 
+        // Reconnect behaviour
+        maxRetries: 8,                    // Max reconnect attempts before showing "failed" state (overrides Blazor default of ~100)
+        retryIntervalMilliseconds: 3000,  // ms between each retry attempt
+
         // Text labels — override for localisation or branding
         title: 'Connection lost',
         subtitle: 'The connection was interrupted. Attempting to reconnect\u2026',
         statusText: 'Reconnecting\u2026',
         reloadButtonText: 'Reload now',
+        failedTitle: 'Unable to reconnect',
+        failedSubtitle: 'The connection to the server could not be restored.',
+        failedReloadButtonText: 'Reload page',
 
         // Styling
         customCss: null,       // Inline CSS string injected into the modal
@@ -45,6 +54,7 @@
 
         // Full override (replaces entire modal HTML)
         reconnectingHtml: null,
+        failedHtml: null,      // Full override for the "failed" state modal
 
         // Override with user config
         ...(window.blazorReconnectConfig || {})
@@ -55,6 +65,9 @@
     // ===== STATE =====
     let reconnectModal = null;
     let isInitialLoad = true;
+    let retryAttempt = 0;
+    let retryCountdownSecs = 0;
+    let retryTimer = null;
 
     // ===== UI COMPONENTS =====
     
@@ -88,7 +101,7 @@
                     ${createSpinnerSvg()}
                     <h3 style='margin: 0 0 0.5rem; color: #333; font-size: 1.25rem;'>${config.title}</h3>
                     <p style='margin: 0 0 0.25rem; color: #666; font-size: 0.95rem;'>${config.subtitle}</p>
-                    <p style='margin: 0 0 1rem; color: #999; font-size: 0.85rem;'>${config.statusText}</p>
+                    <p id='blazor-reconnect-status' style='margin: 0 0 1rem; color: #999; font-size: 0.85rem;'>${config.statusText}</p>
                     <button id='manual-reload-btn'
                             style='background: ${config.primaryColor}; color: white; border: none;
                                    padding: 0.5rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 0.95rem;'>
@@ -100,8 +113,82 @@
         `;
     }
 
+    function getFailedHtml() {
+        if (config.failedHtml) return config.failedHtml;
+
+        const errorIcon = `
+            <svg style="width: 48px; height: 48px; margin: 0 auto 1rem; display: block;" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" fill="none" stroke="#e53e3e" stroke-width="2.5"/>
+                <line x1="15" y1="9" x2="9" y2="15" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="9" y1="9" x2="15" y2="15" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>`;
+
+        return `
+            <div style='position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(0, 0, 0, 0.7); z-index: 9999;
+                        display: flex; align-items: center; justify-content: center;'>
+                <div style='background: white; padding: 2rem; border-radius: 8px;
+                            max-width: 400px; width: 90%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                    ${createLogoHtml()}
+                    ${errorIcon}
+                    <h3 style='margin: 0 0 0.5rem; color: #e53e3e; font-size: 1.25rem;'>${config.failedTitle}</h3>
+                    <p style='margin: 0 0 1.5rem; color: #666; font-size: 0.95rem;'>${config.failedSubtitle}</p>
+                    <button id='manual-reload-btn'
+                            style='background: ${config.primaryColor}; color: white; border: none;
+                                   padding: 0.6rem 2rem; border-radius: 4px; cursor: pointer; font-size: 1rem; font-weight: 500;'>
+                        ${config.failedReloadButtonText}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     // ===== RECONNECT MODAL =====
     
+    // ===== RETRY COUNTDOWN =====
+
+    function updateRetryStatus() {
+        const el = document.getElementById('blazor-reconnect-status');
+        if (!el) return;
+        const countdown = retryCountdownSecs > 0 ? ` \u00b7 Retrying in ${retryCountdownSecs}s` : ' \u00b7 Retrying\u2026';
+        el.textContent = `Attempt ${retryAttempt} / ${config.maxRetries}${countdown}`;
+    }
+
+    function startRetryCountdown() {
+        stopRetryCountdown(); // clear any previous timer
+        retryAttempt = 1;
+        retryCountdownSecs = Math.max(1, Math.round(config.retryIntervalMilliseconds / 1000));
+        updateRetryStatus();
+
+        retryTimer = setInterval(() => {
+            retryCountdownSecs--;
+            if (retryCountdownSecs <= 0) {
+                retryAttempt++;
+                if (retryAttempt > config.maxRetries) {
+                    // Our own failsafe: Blazor may not have fired failed() yet
+                    // (e.g. if reconnectionOptions patching didn't take effect).
+                    stopRetryCountdown();
+                    console.log('[BlazorReconnect] Own maxRetries reached — showing failed UI');
+                    showFailedModal();
+                    return;
+                }
+                retryCountdownSecs = Math.max(1, Math.round(config.retryIntervalMilliseconds / 1000));
+            }
+            updateRetryStatus();
+        }, 1000);
+    }
+
+    function stopRetryCountdown() {
+        if (retryTimer) {
+            clearInterval(retryTimer);
+            retryTimer = null;
+        }
+        retryAttempt = 0;
+        retryCountdownSecs = 0;
+    }
+
+    // ===== RECONNECT MODAL =====
+
     function showReconnectModal() {
         if (reconnectModal) return;
 
@@ -132,14 +219,36 @@
         document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
             window.location.reload();
         });
+
+        startRetryCountdown();
     }
 
     function hideReconnectModal() {
         if (reconnectModal) {
             console.log('[BlazorReconnect] Connection restored, hiding modal');
+            stopRetryCountdown();
             reconnectModal.remove();
             reconnectModal = null;
         }
+    }
+
+    function showFailedModal() {
+        console.log('[BlazorReconnect] Showing failed UI — user must reload manually');
+        stopRetryCountdown();
+        // Replace reconnecting modal (if present) with the failed state
+        if (reconnectModal) {
+            reconnectModal.remove();
+            reconnectModal = null;
+        }
+
+        reconnectModal = document.createElement('div');
+        reconnectModal.id = 'blazor-reconnect-modal';
+        reconnectModal.innerHTML = getFailedHtml();
+        document.body.appendChild(reconnectModal);
+
+        document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
+            window.location.reload();
+        });
     }
 
     // ===== PRIMARY: Blazor reconnection handler hook =====
@@ -167,7 +276,20 @@
     function tryHookBlazorHandler() {
         if (!window.Blazor || !Blazor.defaultReconnectionHandler) return false;
 
+        // Check whether our hook is already in place (survives multiple calls)
+        if (Blazor.defaultReconnectionHandler._reconnectionDisplay?._isOurHook) return true;
+
+        // Cap the retry window so failed() fires in a reasonable time.
+        // Blazor's default is ~100 retries which means 8+ minutes — far too long.
+        if (Blazor.defaultReconnectionHandler.reconnectionOptions) {
+            Blazor.defaultReconnectionHandler.reconnectionOptions.maxRetries =
+                config.maxRetries;
+            Blazor.defaultReconnectionHandler.reconnectionOptions.retryIntervalMilliseconds =
+                config.retryIntervalMilliseconds;
+        }
+
         Blazor.defaultReconnectionHandler._reconnectionDisplay = {
+            _isOurHook: true,
             show() {
                 console.log('[BlazorReconnect] ↓ disconnected (Blazor hook)');
                 suppressDefaultModal();
@@ -179,14 +301,16 @@
                 hideReconnectModal();
             },
             failed() {
-                console.log('[BlazorReconnect] ✗ circuit failed (Blazor hook), reloading in 2s');
+                // All retries exhausted — show a static "failed" UI.
+                // Do NOT auto-reload: that creates an infinite reload loop if the
+                // server is still down. The user clicks "Reload page" when ready.
+                console.log('[BlazorReconnect] ✗ circuit failed (Blazor hook) — showing failed UI');
                 suppressDefaultModal();
-                showReconnectModal(); // show briefly before reload so user sees something
-                setTimeout(() => window.location.reload(), 2000);
+                showFailedModal();
             }
         };
 
-        console.log('[BlazorReconnect] ✅ Blazor.defaultReconnectionHandler hooked');
+        console.log(`[BlazorReconnect] ✅ Blazor.defaultReconnectionHandler hooked (maxRetries=${config.maxRetries}, interval=${config.retryIntervalMilliseconds}ms)`);
         return true;
     }
 
@@ -230,9 +354,8 @@
 
         } else if (state === 'failed') {
             suppressDefaultModal();
-            showReconnectModal();
-            console.log('[BlazorReconnect] Circuit expired (poll), reloading in 2s');
-            setTimeout(() => window.location.reload(), 2000);
+            showFailedModal();
+            console.log('[BlazorReconnect] Circuit expired (poll) — showing failed UI');
 
         } else if (state === 'connected' && reconnectModal) {
             restoreDefaultModal();
@@ -243,6 +366,22 @@
     function startPolling() {
         setInterval(pollReconnectState, 250);
         console.log('[BlazorReconnect] Fallback polling started (250ms)');
+    }
+
+    // ===== MAINTENANCE HOOK =====
+    //
+    // Re-checks every 5 seconds whether our hook is still in place.
+    // After a server restart Blazor may re-initialize defaultReconnectionHandler,
+    // replacing _reconnectionDisplay with its own default object and resetting
+    // reconnectionOptions to the (very large) defaults. This catches that.
+    function startMaintenanceHook() {
+        setInterval(() => {
+            if (!window.Blazor || !Blazor.defaultReconnectionHandler) return;
+            if (!Blazor.defaultReconnectionHandler._reconnectionDisplay?._isOurHook) {
+                console.log('[BlazorReconnect] Hook was replaced — re-hooking');
+                hooked = tryHookBlazorHandler();
+            }
+        }, 5000);
     }
 
     // ===== ERROR SUPPRESSION =====
@@ -356,8 +495,11 @@
             }
         }, 100);
 
-        // Start polling fallback in parallel (pollReconnectState is a no-op when hooked=true).
-        // The 1-second guard lets Blazor complete its initial circuit connection.
+        // Maintenance: re-hook every 5s in case Blazor re-inits after server restart.
+        startMaintenanceHook();
+
+        // Start polling safety net. The 1-second guard lets Blazor complete its
+        // initial circuit connection before we start watching for state changes.
         setTimeout(() => {
             isInitialLoad = false;
             startPolling();
