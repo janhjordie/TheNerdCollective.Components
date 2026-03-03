@@ -1,6 +1,6 @@
 # TheNerdCollective.Blazor.Reconnect
 
-**v1.8.0** — Silent-first: 5s grace period + immediate /health ping + scroll position preservation + accessibility + network-restore detection. Modal only appears if recovery takes longer than 5s.
+**v1.10.0** — Silent-first: 5s grace period + immediate /health ping + scroll position preservation + accessibility + network-restore detection + Page Lifecycle freeze/resume + desktop window-focus + lifecycle callbacks + `requireFailedPingBeforeModal` for always-on deployments. Modal only appears if recovery takes longer than 5s — and with ACA/always-on it only appears if the server is genuinely failing health checks.
 
 A lightweight, project-agnostic Blazor Server circuit reconnection handler. Works out of the box with sensible English defaults and is fully customisable for branding, localisation, and styling.
 
@@ -8,11 +8,16 @@ A lightweight, project-agnostic Blazor Server circuit reconnection handler. Work
 
 ✅ **Silent-first** — 5-second grace period with immediate /health ping. Modal only shown if recovery takes > 5s (server genuinely down or deploying)  
 ✅ **Scroll position preserved** — saves scroll position to `localStorage` when the circuit drops (including hot-deploy reloads); restores after reload with correct timing; cleans up immediately  
-✅ **Accessible** — modal uses `role="alertdialog"`, `aria-modal`, correct `aria-labelledby`, and moves focus on show — screen readers announce the connection loss  
+✅ **Accessible** — modal uses `role="alertdialog"`, `aria-modal`, `aria-labelledby`, `aria-describedby`, and moves focus on show — screen readers announce the connection loss  
+✅ **Reduced-motion aware** — spinner animation paused when `prefers-reduced-motion: reduce` is set  
 ✅ **Network-restore aware** — reacts instantly to the browser `online` event (WiFi reconnect, tunnel exit, airplane mode off)  
+✅ **Desktop window-focus** — `window.focus` fires when the browser window is restored from alt-tab / minimise (visibilitychange alone does not cover this case)  
+✅ **Page Lifecycle API** — `freeze` saves scroll before Android Chrome freezes the tab; `resume` calls `Blazor.reconnect()` one RTT earlier than `visibilitychange`  
 ✅ **Zero config** — drop in one `<script>` tag and it just works  
 ✅ **Rapid-first backoff** — first retry is instant, then gradually backs off; matches Blazor's built-in strategy  
 ✅ **iOS/mobile aware** — handles screen lock, bfcache, and tab freeze correctly (see [iOS behaviour](#ios--mobile-behaviour))  
+✅ **Lifecycle callbacks** — `onReconnecting`, `onReconnected`, `onFailed`, `onServerBack` for analytics and telemetry  
+✅ **Always-on deployments** — `requireFailedPingBeforeModal: true` suppresses the modal until `/health` actually fails — guarantees completely silent operation for Azure Container Apps, Railway, Fly.io etc.
 ✅ **Project-agnostic** — neutral English defaults, all text is configurable  
 ✅ **Custom branding** — add your logo, brand colour, and CSS in seconds  
 ✅ **Non-invasive** — Blazor starts normally, no `autostart="false"` required  
@@ -178,10 +183,39 @@ window.blazorReconnectConfig = {
 | `customCss` | `string\|null` | `null` | Inline CSS injected into the modal |
 | `customCssUrl` | `string\|null` | `null` | URL to an external stylesheet loaded with the modal |
 | `reconnectingHtml` | `string\|null` | `null` | Completely replaces the built-in modal HTML |
+| `requireFailedPingBeforeModal` | `boolean` | `false` | When `true`: the modal is suppressed until at least one `/health` ping returns non-2xx or a network error. **Recommended for always-on deployments** (Azure Container Apps, Railway, Fly.io) — `/health` responds in < 200ms so a deploy triggers a silent `safeReload()` before the grace period expires, and the modal only ever appears on genuine outages. |
+| `onReconnecting` | `function\|null` | `null` | `() => void` — fired when the modal is about to appear (grace period elapsed and, if `requireFailedPingBeforeModal=true`, a ping failure confirmed). |
+| `onReconnected` | `function\|null` | `null` | `() => void` — fired when the circuit is restored (silently within grace period or after modal). |
+| `onFailed` | `function\|null` | `null` | `() => void` — fired when Phase 1 is exhausted and Phase 2 UI is shown. |
+| `onServerBack` | `function\|null` | `null` | `() => void` — fired just before auto-reload when Phase 2 ping succeeds. |
 
 ---
 
 ## Branding Examples
+
+### Lifecycle callbacks for analytics
+
+```javascript
+window.blazorReconnectConfig = {
+    onReconnecting: () => analytics.track('blazor_reconnecting'),
+    onReconnected:  () => analytics.track('blazor_reconnected'),
+    onFailed:       () => analytics.track('blazor_failed'),
+    onServerBack:   () => analytics.track('blazor_server_back')
+};
+```
+
+### Azure Container Apps / always-on recommended config
+
+```javascript
+window.blazorReconnectConfig = {
+    requireFailedPingBeforeModal: true  // modal only appears if /health actually fails
+};
+```
+
+With this single line the full deploy flow is:
+1. Container restarted → circuit drops → `/health` hits new replica → 200 in ~100ms → `safeReload()` silently
+2. User lands back at the same scroll position, sees nothing
+3. Modal reserved for genuine outages only
 
 ### Add a logo and brand colour
 
@@ -275,6 +309,21 @@ For version detection and update banners, use the companion package:
 
 - .NET 10.0+
 - Blazor Server (`InteractiveServer` render mode)
+
+## Browser Trigger Coverage
+
+Every platform event that can signal a dead circuit is handled:
+
+| Event | Platform | Action |
+|---|---|---|
+| `visibilitychange` (visible) | All browsers | `Blazor.reconnect()` + immediate ping if disconnect detected |
+| `window.focus` | Desktop (Chrome, Firefox, Edge, Safari) | `Blazor.reconnect()` + immediate ping. Covers alt-tab / window minimise where `visibilitychange` does **not** fire |
+| Page Lifecycle `resume` | Android Chrome 68+ | `Blazor.reconnect()` one RTT before `visibilitychange` fires |
+| Page Lifecycle `freeze` | Android Chrome 68+ | Saves scroll position before tab is frozen |
+| `pageshow` (persisted) | iOS Safari (bfcache) | `location.reload()` for a fresh circuit |
+| `online` | Android/Desktop Chrome, Firefox, Edge | Immediate health ping when network connectivity is restored |
+
+---
 
 ## Browser Compatibility
 

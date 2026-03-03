@@ -1,12 +1,20 @@
 /**
  * Blazor Server Reconnection Handler
- * TheNerdCollective.Blazor.Reconnect v1.8.0
+ * TheNerdCollective.Blazor.Reconnect v1.10.0
  *
  * Silent-first design: the modal is NEVER shown within the first 5 seconds.
  * During this window Blazor retries the circuit AND the /health endpoint is polled
  * immediately. If either succeeds the user sees nothing — no flash, no disruption.
  * The modal only appears if 5 seconds elapse with no recovery, which reliably
  * indicates a genuine server restart / deployment rather than a momentary hiccup.
+ *
+ * NEW in v1.10.0: requireFailedPingBeforeModal (default false).
+ *   When true, the modal is further suppressed until at least one /health ping
+ *   returns non-2xx or a network error. On always-on deployments (ACA, Railway…)
+ *   /health responds in < 200ms — a 2xx fires safeReload() silently BEFORE the 5s
+ *   grace expires and the modal is never reached in the first place.
+ *   Set requireFailedPingBeforeModal=true to make the modal ONLY appear on genuine
+ *   outages where the server is actually failing health checks.
  *
  * - Silent grace period (showDelayMilliseconds, default 5000ms): modal is held
  *            back while Blazor retries + Phase 2 ping run in background.
@@ -21,34 +29,38 @@
  * - visibilitychange: ALWAYS calls Blazor.reconnect() on visibility restore.
  *            Sets wokenFromVisibility=true for diagnostics. If disconnect already
  *            visible, fires an additional immediate one-shot ping.
+ * - window.focus: ALWAYS calls Blazor.reconnect() when the browser WINDOW regains
+ *            focus (desktop alt-tab / minimise). Covers the gap where visibilitychange
+ *            does not fire because the tab was already selected.
+ * - Page Lifecycle API (Chrome 68+, Android Chrome):
+ *            'freeze' → saves scroll before the tab is frozen to save memory.
+ *            'resume' → calls Blazor.reconnect() before visibilitychange fires,
+ *            collapsing recovery time by one round trip on Android Chrome.
  * - pageshow (persisted): iOS bfcache — reloads immediately for a fresh circuit.
  * - Polls Blazor's reconnect state every 250ms (reliable, no MutationObserver races)
  * - Re-hooks Blazor's reconnectionHandler every 5s so it survives server restarts
  * - Suppresses noisy console errors during disconnection
+ * - Lifecycle callbacks: onReconnecting / onReconnected / onFailed / onServerBack
+ * - safeReload(): all programmatic reloads save scroll position first
+ * - prefers-reduced-motion: spinner animation paused for motion-sensitive users
+ *
+ * Platform trigger coverage:
+ *   Desktop browser  — visibilitychange (tab switch) + window.focus (alt-tab/minimise)
+ *   Android Chrome   — visibilitychange + Page Lifecycle resume (1 RTT faster)
+ *   iOS Safari       — visibilitychange + pageshow bfcache guard
+ *   iOS PWA          — visibilitychange + pageshow
+ *   Network restore  — online event → immediate health check
  *
  * Timeline for any disconnect:
  *   0ms      — circuit drops, Blazor fires show()
  *   0ms      — Phase 2 /health ping starts immediately
  *   0–4999ms — Blazor retries + /health polling; user sees nothing
  *              If hide() fires → modal cancelled, done ✅
- *              If /health 2xx → window.location.reload(), done ✅
+ *              If /health 2xx → safeReload() (scroll saved), done ✅
  *   5000ms   — grace period expires → modal shown
  *              (only reached if server is genuinely down / deploying)
  *
- * iOS screen-lock (short lock < ~60s):
- *   visibilitychange → Blazor.reconnect() + wokenFromVisibility=true
- *   Blazor fires show() → Phase 2 already running at 0ms
- *   Server responds → reload in ~300–800ms, user sees nothing ✅
- * iOS long lock / memory pressure: WKWebView killed → full page reload by Safari.
- * bfcache (back/fwd swipe): pageshow persisted=true → immediate location.reload().
- *
  * Works with Blazor's default startup (no autostart="false" needed!)
- *
- * Scroll position preservation:
- *   When the circuit drops, the current scroll position is saved to localStorage
- *   (key: __blazor_reconnect_scroll). After the page reloads, scroll is restored
- *   and the key is immediately removed. If Blazor reconnects without a reload,
- *   the key is cleaned up by hide().
  *
  * Usage:
  *   <script src="_framework/blazor.web.js"></script>
@@ -102,6 +114,15 @@
         serverPingIntervalMilliseconds: 2000,       // ms between ping attempts (fast polling inside grace period)
         autoReloadOnServerBack: true,               // true = auto-reload; false = show a prompt
 
+        // When true: the reconnect modal is suppressed until at LEAST ONE /health ping has
+        // returned non-2xx (or a network error). This is the recommended setting for
+        // always-on deployments (Azure Container Apps, Railway, Fly.io, etc.) where the
+        // server is almost never truly offline — /health responds in < 200ms so a 2xx ping
+        // fires and triggers a silent safeReload() before the grace period expires.
+        // With this flag the modal ONLY appears for genuine outages, never for deploys.
+        // Default false keeps the existing time-based behaviour for backward compatibility.
+        requireFailedPingBeforeModal: false,
+
         // Text labels — override for localisation or branding
         title: 'Connection lost',
         subtitle: 'The connection was interrupted. Attempting to reconnect\u2026',
@@ -123,13 +144,20 @@
         reconnectingHtml: null,
         failedHtml: null,      // Full override for the "failed" state modal
 
+        // Lifecycle callbacks — fired at key moments. Useful for analytics / telemetry.
+        // Each must be a zero-argument function, or null to skip.
+        onReconnecting: null,  // () => void — modal is about to show (circuit dropped > grace period)
+        onReconnected: null,   // () => void — circuit restored (silently or after modal)
+        onFailed: null,        // () => void — Phase 1 exhausted; Phase 2 UI is shown
+        onServerBack: null,    // () => void — Phase 2 ping succeeded (server is reachable again)
+
         // Override with user config
         ...(window.blazorReconnectConfig || {})
     };
 
     console.log('[BlazorReconnect] Initializing with config:', config);
 
-    const VERSION = 'v1.8.0';
+    const VERSION = 'v1.10.0';
 
     // ===== SCROLL POSITION PRESERVATION =====
     //
@@ -180,6 +208,26 @@
         } catch (e) {}
     }
 
+    // ===== LIFECYCLE CALLBACKS =====
+
+    function fireCallback(name) {
+        const fn = config[name];
+        if (typeof fn === 'function') {
+            try { fn(); } catch (e) { /* never break the reconnect flow */ }
+        }
+    }
+
+    // ===== SAFE RELOAD =====
+    //
+    // Centralises all page reloads. Saves scroll position first (idempotent — overwrites
+    // with current value if already saved when the circuit dropped), then reloads.
+    // All programmatic reloads go through here so scroll is always preserved.
+
+    function safeReload() {
+        saveScrollPosition();
+        window.location.reload();
+    }
+
     // ===== STATE =====
     let reconnectModal = null;
     let isInitialLoad = true;
@@ -203,6 +251,10 @@
     let serverPingAttempt = 0;
     let serverPingAbortController = null;  // cancels in-flight fetch when circuit reconnects
     let circuitReconnected = false;        // guard: prevents reload if hide() fires just as ping resolves
+
+    // requireFailedPingBeforeModal state
+    let pingHasFailed = false;                   // at least one /health ping returned non-2xx or network error
+    let graceExpiredAwaitingPingFailure = false;  // grace period elapsed but modal held — waiting for first ping failure
 
     // ===== UI COMPONENTS =====
     
@@ -230,13 +282,13 @@
             <div style='position: fixed; top: 0; left: 0; right: 0; bottom: 0;
                         background: rgba(0, 0, 0, 0.7); z-index: 9999;
                         display: flex; align-items: center; justify-content: center;'>
-                <div role='alertdialog' aria-modal='true' aria-labelledby='blazor-reconnect-title'
+                <div role='alertdialog' aria-modal='true' aria-labelledby='blazor-reconnect-title' aria-describedby='blazor-reconnect-subtitle'
                      tabindex='-1' style='background: white; padding: 2rem; border-radius: 8px;
                             max-width: 400px; width: 90%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
                     ${createLogoHtml()}
                     ${createSpinnerSvg()}
                     <h3 id='blazor-reconnect-title' style='margin: 0 0 0.5rem; color: #333; font-size: 1.25rem;'>${config.title}</h3>
-                    <p style='margin: 0 0 0.25rem; color: #666; font-size: 0.95rem;'>${config.subtitle}</p>
+                    <p id='blazor-reconnect-subtitle' style='margin: 0 0 0.25rem; color: #666; font-size: 0.95rem;'>${config.subtitle}</p>
                     <p id='blazor-reconnect-status' style='margin: 0 0 1rem; color: #999; font-size: 0.85rem;'>${config.statusText}</p>
                     <button id='manual-reload-btn'
                             style='background: ${config.primaryColor}; color: white; border: none;
@@ -246,7 +298,12 @@
                     <p style='margin: 1rem 0 0; color: #ccc; font-size: 0.7rem;'>${VERSION}</p>
                 </div>
             </div>
-            <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+            <style>
+                @keyframes spin { to { transform: rotate(360deg); } }
+                @media (prefers-reduced-motion: reduce) {
+                    #blazor-reconnect-modal svg, #blazor-reconnect-modal img { animation: none !important; }
+                }
+            </style>
         `;
     }
 
@@ -267,7 +324,7 @@
                 <div style='position: fixed; top: 0; left: 0; right: 0; bottom: 0;
                             background: rgba(0, 0, 0, 0.7); z-index: 9999;
                             display: flex; align-items: center; justify-content: center;'>
-                    <div role='alertdialog' aria-modal='true' aria-labelledby='blazor-ping-title'
+                    <div role='alertdialog' aria-modal='true' aria-labelledby='blazor-ping-title' aria-describedby='blazor-ping-subtitle'
                          tabindex='-1' style='background: white; padding: 2rem; border-radius: 8px;
                                 max-width: 400px; width: 90%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
                         ${createLogoHtml()}
@@ -403,16 +460,39 @@
                         console.log(`[BlazorReconnect] Phase 2: server responded (${resp.status}) after ${serverPingAttempt} attempt(s)`);
                         if (config.autoReloadOnServerBack) {
                             console.log('[BlazorReconnect] Auto-reloading page');
-                            window.location.reload();
+                            fireCallback('onServerBack');
+                            safeReload();
                         } else {
                             console.log('[BlazorReconnect] Showing "server is back" prompt (autoReloadOnServerBack=false)');
                             showServerBackPrompt();
                         }
+                    } else {
+                        // Non-2xx response (e.g. 503 during deploy) — mark first failure and
+                        // show modal immediately if grace already expired and was waiting.
+                        if (!pingHasFailed) {
+                            pingHasFailed = true;
+                            console.log(`[BlazorReconnect] Phase 2: first ping failure (${resp.status})`);
+                            if (graceExpiredAwaitingPingFailure && !reconnectModal) {
+                                graceExpiredAwaitingPingFailure = false;
+                                showReconnectModal(/* pingAlreadyStarted= */ true);
+                            }
+                        }
+                        // Keep polling — server may still be starting up
                     }
                 } catch (err) {
                     serverPingAbortController = null;
                     if (err.name === 'AbortError') {
                         // Cancelled by stopServerPing() — circuit reconnected, do nothing
+                        return;
+                    }
+                    // Network-level failure — mark first failure and show modal if waiting.
+                    if (!pingHasFailed) {
+                        pingHasFailed = true;
+                        console.log('[BlazorReconnect] Phase 2: first ping failure (network error)');
+                        if (graceExpiredAwaitingPingFailure && !reconnectModal) {
+                            graceExpiredAwaitingPingFailure = false;
+                            showReconnectModal(/* pingAlreadyStarted= */ true);
+                        }
                     }
                     // Server still unreachable — keep polling silently
                 }
@@ -469,19 +549,38 @@
                 console.log(`[BlazorReconnect] Immediate ping OK (${resp.status}) — server is reachable`);
                 if (config.autoReloadOnServerBack) {
                     console.log('[BlazorReconnect] Auto-reloading page');
-                    window.location.reload();
+                    fireCallback('onServerBack');
+                    safeReload();
                 } else {
                     showServerBackPrompt();
                 }
             } else {
-                // Server reachable but non-2xx (e.g. degraded health) — let normal polling continue
-                console.log(`[BlazorReconnect] Immediate ping non-OK (${resp.status}) — continuing polling`);
+                // Server reachable but non-2xx (e.g. degraded health) — mark failure, continue polling.
+                if (!pingHasFailed) {
+                    pingHasFailed = true;
+                    console.log(`[BlazorReconnect] Immediate ping non-OK (${resp.status}) — marking first ping failure`);
+                    if (graceExpiredAwaitingPingFailure && !reconnectModal) {
+                        graceExpiredAwaitingPingFailure = false;
+                        showReconnectModal(/* pingAlreadyStarted= */ true);
+                    }
+                } else {
+                    console.log(`[BlazorReconnect] Immediate ping non-OK (${resp.status}) — continuing polling`);
+                }
                 // Restart regular interval if it was cleared above
                 if (!serverPingTimer) startServerPing(0);
             }
         } catch (err) {
             serverPingAbortController = null;
             if (err.name === 'AbortError') return; // cancelled by stopServerPing() — circuit restored
+            // Network-level failure — mark first failure and show modal if waiting.
+            if (!pingHasFailed) {
+                pingHasFailed = true;
+                console.log('[BlazorReconnect] Immediate ping failed (network error) — marking first ping failure');
+                if (graceExpiredAwaitingPingFailure && !reconnectModal) {
+                    graceExpiredAwaitingPingFailure = false;
+                    showReconnectModal(/* pingAlreadyStarted= */ true);
+                }
+            }
             // Server unreachable — ensure regular polling is running
             console.log('[BlazorReconnect] Immediate ping failed (server unreachable) — continuing polling');
             if (!serverPingTimer) startServerPing(0);
@@ -509,7 +608,9 @@
     function startRetryCountdown() {
         stopRetryCountdown(); // clear any previous timer
         retryAttempt = 1;
-        retryCountdownSecs = Math.max(1, Math.round(getRetryIntervalMs(retryAttempt) / 1000));
+        const firstMs = getRetryIntervalMs(retryAttempt);
+        // Show 0 for sub-500ms intervals ("Retrying…") rather than incorrectly showing "in 1s"
+        retryCountdownSecs = firstMs < 500 ? 0 : Math.round(firstMs / 1000);
         updateRetryStatus();
 
         retryTimer = setInterval(() => {
@@ -524,7 +625,8 @@
                     showFailedModal();
                     return;
                 }
-                retryCountdownSecs = Math.max(1, Math.round(getRetryIntervalMs(retryAttempt) / 1000));
+                const nextMs = getRetryIntervalMs(retryAttempt);
+                retryCountdownSecs = nextMs < 500 ? 0 : Math.round(nextMs / 1000);
             }
             updateRetryStatus();
         }, 1000);
@@ -558,6 +660,10 @@
 
         if (reconnectModal || showDelayTimer) return; // already showing or scheduled
 
+        // Reset ping-failure tracking for this disconnect cycle.
+        pingHasFailed = false;
+        graceExpiredAwaitingPingFailure = false;
+
         const delay = config.showDelayMilliseconds || 0;
         if (delay <= 0) {
             showReconnectModal();
@@ -577,7 +683,15 @@
         showDelayTimer = setTimeout(() => {
             showDelayTimer = null;
             if (!reconnectModal) {
-                showReconnectModal(/* pingAlreadyStarted= */ true);
+                if (config.requireFailedPingBeforeModal && !pingHasFailed) {
+                    // Grace period elapsed but no ping failure confirmed yet.
+                    // Hold the modal — the ping interval will call showReconnectModal()
+                    // the moment a non-2xx or network error is observed.
+                    graceExpiredAwaitingPingFailure = true;
+                    console.log('[BlazorReconnect] Grace period elapsed — modal held pending first ping failure (requireFailedPingBeforeModal=true)');
+                } else {
+                    showReconnectModal(/* pingAlreadyStarted= */ true);
+                }
             }
         }, delay);
     }
@@ -586,6 +700,7 @@
         if (reconnectModal) return;
 
         console.log('[BlazorReconnect] Showing reconnect UI');
+        fireCallback('onReconnecting');
 
         reconnectModal = document.createElement('div');
         reconnectModal.id = 'blazor-reconnect-modal';
@@ -613,7 +728,7 @@
         reconnectModal.querySelector('[role=alertdialog]')?.focus();
 
         document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
-            window.location.reload();
+            safeReload();
         });
 
         startRetryCountdown();
@@ -636,12 +751,17 @@
         // (if not visibility-triggered) uses the normal Phase 2 start delay.
         wokenFromVisibility = false;
 
+        // Reset ping-failure tracking — fresh slate for next disconnect cycle.
+        pingHasFailed = false;
+        graceExpiredAwaitingPingFailure = false;
+
         // Cancel grace period if hide() fires before the timer expires
         // (circuit reconnected within the silent window — user sees nothing)
         if (showDelayTimer) {
             console.log('[BlazorReconnect] ✅ Circuit restored within grace period — no modal was shown');
             cancelShowDelay();
             stopServerPing(true);
+            fireCallback('onReconnected');
             return;
         }
         if (reconnectModal) {
@@ -652,6 +772,7 @@
             stopServerPing(true);
             reconnectModal.remove();
             reconnectModal = null;
+            fireCallback('onReconnected');
         }
     }
 
@@ -659,6 +780,7 @@
         const phase2Active = config.serverPingEnabled;
         console.log(`[BlazorReconnect] Phase 1 exhausted — switching to ${phase2Active ? 'Phase 2 (server ping)' : 'static failed'} UI`);
         stopRetryCountdown();
+        fireCallback('onFailed');
         // Replace reconnecting modal (if present) with the Phase 2 / failed state
         if (reconnectModal) {
             reconnectModal.remove();
@@ -674,7 +796,7 @@
         reconnectModal.querySelector('[role=alertdialog]')?.focus();
 
         document.getElementById('manual-reload-btn')?.addEventListener('click', () => {
-            window.location.reload();
+            safeReload();
         });
 
         // If Phase 2 is already running (started in parallel during Phase 1), keep it going.
@@ -824,7 +946,8 @@
     
     const originalConsoleError = console.error;
     console.error = function(...args) {
-        const message = args.join(' ');
+        // args may contain objects — use String() so they don't become '[object Object]'
+        const message = Array.from(args).map(a => (typeof a === 'string' ? a : String(a))).join(' ');
         
         // Suppress known benign errors during disconnection
         const suppressPatterns = [
@@ -847,8 +970,7 @@
         // This happens when a new version is deployed while user is connected
         if (message.includes('The list of component operations is not valid')) {
             console.log('[BlazorReconnect] Version deployment detected (invalid component operations), reloading...');
-            saveScrollPosition();
-            setTimeout(() => window.location.reload(), 2000);
+            setTimeout(() => safeReload(), 2000);
             return;
         }
         
@@ -856,8 +978,7 @@
         if (message.includes('circuit state could not be retrieved') ||
             (message.includes('circuit') && message.includes('expired'))) {
             console.log('[BlazorReconnect] Circuit expired, reloading...');
-            saveScrollPosition();
-            setTimeout(() => window.location.reload(), 2000);
+            setTimeout(() => safeReload(), 2000);
             return;
         }
         
@@ -875,8 +996,7 @@
         if (error.includes('The list of component operations is not valid')) {
             console.log('[BlazorReconnect] Version deployment detected, reloading...');
             event.preventDefault();
-            saveScrollPosition();
-            setTimeout(() => window.location.reload(), 2000);
+            setTimeout(() => safeReload(), 2000);
             return;
         }
         
@@ -885,8 +1005,7 @@
             (error.includes('circuit') && error.includes('expired'))) {
             console.log('[BlazorReconnect] Circuit expired, reloading...');
             event.preventDefault();
-            saveScrollPosition();
-            setTimeout(() => window.location.reload(), 2000);
+            setTimeout(() => safeReload(), 2000);
             return;
         }
         
@@ -902,9 +1021,12 @@
     
     window.BlazorReconnect = {
         status: () => {
-            console.log('[BlazorReconnect] Status:', {
+            const s = {
+                version: VERSION,
                 modalVisible: !!reconnectModal,
                 gracePeriodActive: !!showDelayTimer,
+                graceExpiredAwaitingPingFailure,
+                pingHasFailed,
                 isInitialLoad,
                 hooked,
                 circuitState: getCircuitState(),
@@ -913,7 +1035,9 @@
                 serverPingAttempt,
                 wokenFromVisibility,
                 scrollPositionSaved: (() => { try { return localStorage.getItem('__blazor_reconnect_scroll') !== null; } catch { return false; } })()
-            });
+            };
+            console.log('[BlazorReconnect] Status:', s);
+            return s;
         },
         showModal: () => scheduleShowReconnectModal(),
         showModalNow: () => showReconnectModal(),   // skip grace period for testing
@@ -1001,6 +1125,58 @@
         if (!disconnectDetected) return; // circuit is healthy, nothing to do
         console.log('[BlazorReconnect] Network restored (online event) — immediate health check');
         fireImmediatePing();
+    });
+
+    // ===== PAGE LIFECYCLE API (Chrome 68+, Android Chrome) =====
+    //
+    // 'freeze' fires when the browser is about to freeze the page to save memory
+    // (e.g. background tab on Android Chrome). Save scroll NOW so it survives
+    // the freeze → resume → reload cycle.
+    //
+    // 'resume' fires when the browser UNFREEZE a frozen page — BEFORE visibilitychange.
+    // Acting here gives the fastest possible reconnect on Android Chrome background-tab
+    // scenarios (one RTT sooner than waiting for visibilitychange).
+
+    document.addEventListener('freeze', () => {
+        saveScrollPosition();
+        console.log('[BlazorReconnect] Page freezing (Page Lifecycle API) — scroll position saved');
+    });
+
+    document.addEventListener('resume', () => {
+        if (isInitialLoad) return;
+        console.log('[BlazorReconnect] Page resumed from frozen state (Page Lifecycle API)');
+        // Mark wokenFromVisibility so Phase 2 starts at 0ms when show() fires
+        wokenFromVisibility = true;
+        setTimeout(() => { wokenFromVisibility = false; }, 5000);
+        if (window.Blazor?.reconnect) {
+            Blazor.reconnect().catch(() => {});
+        }
+    });
+
+    // ===== DESKTOP: WINDOW FOCUS EVENT =====
+    //
+    // visibilitychange fires when the USER SWITCHES TABS. But when the browser WINDOW
+    // itself is minimised or alt-tabbed away while the tab is already selected,
+    // visibilitychange does NOT fire — only window.focus fires when the window comes back.
+    // This covers that gap for desktop users who alt-tab away from the browser entirely.
+
+    window.addEventListener('focus', () => {
+        if (isInitialLoad) return;
+        if (circuitReconnected) return;
+        // Only act when the tab is visible — tab-switch case is handled by visibilitychange.
+        if (document.visibilityState !== 'visible') return;
+
+        // Call Blazor.reconnect() unconditionally — safe no-op when circuit is healthy.
+        if (window.Blazor?.reconnect) {
+            console.log('[BlazorReconnect] Window focused (desktop) — calling Blazor.reconnect()');
+            Blazor.reconnect().catch(() => {});
+        }
+        // If a disconnect is already detected, accelerate recovery with an immediate ping.
+        const disconnectDetected = !!reconnectModal || !!showDelayTimer;
+        if (disconnectDetected) {
+            console.log('[BlazorReconnect] Window focused with active disconnect — immediate health check');
+            fireImmediatePing();
+        }
     });
 
     // ===== INITIALIZATION =====

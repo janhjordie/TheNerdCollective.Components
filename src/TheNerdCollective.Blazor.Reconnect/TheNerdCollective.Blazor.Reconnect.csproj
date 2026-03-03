@@ -7,7 +7,7 @@
     <RootNamespace>TheNerdCollective.Blazor.Reconnect</RootNamespace>
     <AssemblyName>TheNerdCollective.Blazor.Reconnect</AssemblyName>
     <PackageId>TheNerdCollective.Blazor.Reconnect</PackageId>
-    <Version>1.8.0</Version>
+    <Version>1.10.0</Version>
     <Authors>The Nerd Collective</Authors>
     <Description>A lightweight Blazor Server circuit reconnection handler. Shows professional reconnect UI when the circuit is lost. Correctly observes Blazor's reconnect-show / reconnect-hide / reconnect-failed class lifecycle — modal auto-hides on recovery and only force-reloads on permanent circuit expiry. Preserves and restores scroll position across reconnect-triggered reloads. Accessible (ARIA alertdialog + focus management). Reacts instantly to network restore via online event. Non-invasive — works with Blazor's default startup.</Description>
     <PackageTags>blazor;blazor-server;circuit;reconnection;signalr;handler;ui</PackageTags>
