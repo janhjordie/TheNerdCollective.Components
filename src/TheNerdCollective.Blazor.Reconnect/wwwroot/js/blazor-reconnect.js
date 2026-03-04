@@ -1,6 +1,6 @@
 /**
  * Blazor Server Reconnection Handler
- * TheNerdCollective.Blazor.Reconnect v1.10.0
+ * TheNerdCollective.Blazor.Reconnect v1.10.1
  *
  * Silent-first design: the modal is NEVER shown within the first 5 seconds.
  * During this window Blazor retries the circuit AND the /health endpoint is polled
@@ -102,7 +102,7 @@
         // [5000…]  = 5s, 10s … (long-tail / server restart scenario)
         // If you prefer a flat interval, set retryIntervalMilliseconds to a number (e.g. 2000)
         // instead of the array form.
-        retryIntervalMilliseconds: [0, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000, 30000],
+        retryIntervalMilliseconds: [0, 500, 1000, 2000, 3000, 5000],
 
         // Phase 2: server-alive polling — starts IN PARALLEL with Phase 1 after a short delay.
         // If the server responds while Phase 1 is still running, reload immediately.
@@ -157,7 +157,7 @@
 
     console.log('[BlazorReconnect] Initializing with config:', config);
 
-    const VERSION = 'v1.10.0';
+    const VERSION = 'v1.10.1';
 
     // ===== SCROLL POSITION PRESERVATION =====
     //

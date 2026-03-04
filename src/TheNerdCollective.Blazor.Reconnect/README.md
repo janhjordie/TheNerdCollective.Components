@@ -1,6 +1,6 @@
 # TheNerdCollective.Blazor.Reconnect
 
-**v1.10.0** — Silent-first: 5s grace period + immediate /health ping + scroll position preservation + accessibility + network-restore detection + Page Lifecycle freeze/resume + desktop window-focus + lifecycle callbacks + `requireFailedPingBeforeModal` for always-on deployments. Modal only appears if recovery takes longer than 5s — and with ACA/always-on it only appears if the server is genuinely failing health checks.
+**v1.10.1** — Silent-first: 5s grace period + immediate /health ping + scroll position preservation + accessibility + network-restore detection + Page Lifecycle freeze/resume + desktop window-focus + lifecycle callbacks + `requireFailedPingBeforeModal` for always-on deployments. Modal only appears if recovery takes longer than 5s — and with ACA/always-on it only appears if the server is genuinely failing health checks.
 
 A lightweight, project-agnostic Blazor Server circuit reconnection handler. Works out of the box with sensible English defaults and is fully customisable for branding, localisation, and styling.
 
